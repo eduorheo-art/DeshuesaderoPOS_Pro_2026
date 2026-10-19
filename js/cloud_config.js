@@ -1,0 +1,22 @@
+// cloud_config.js - Credenciales de Supabase (se guardan en el dispositivo, no en el código)
+const CLOUD_URL_KEY = "yonke_supabase_url";
+const CLOUD_ANON_KEY = "yonke_supabase_anon_key";
+
+window.YonkeCloudConfig = {
+  get() {
+    return {
+      url: (localStorage.getItem(CLOUD_URL_KEY) || "").trim(),
+      anonKey: (localStorage.getItem(CLOUD_ANON_KEY) || "").trim()
+    };
+  },
+
+  save(url, anonKey) {
+    localStorage.setItem(CLOUD_URL_KEY, (url || "").trim());
+    localStorage.setItem(CLOUD_ANON_KEY, (anonKey || "").trim());
+  },
+
+  isConfigured() {
+    const cfg = this.get();
+    return Boolean(cfg.url && cfg.anonKey);
+  }
+};

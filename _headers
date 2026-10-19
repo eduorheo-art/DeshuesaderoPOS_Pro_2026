@@ -1,0 +1,12 @@
+/*
+  Access-Control-Allow-Origin: *
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+
+/manifest.json
+  Content-Type: application/manifest+json
+  Access-Control-Allow-Origin: *
+
+/service-worker.js
+  Content-Type: application/javascript
+  Cache-Control: max-age=0, no-cache, no-store, must-revalidate
