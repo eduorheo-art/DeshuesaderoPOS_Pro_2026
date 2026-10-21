@@ -18,9 +18,12 @@ class YonkeDB {
 
   async init() {
     try {
-      if (window.yonkeLocalStore) {
-        await window.yonkeLocalStore.init();
-      }
+      // 🚨 LIMPIEZA TOTAL FORZADA DE INDEXEDDB Y LOCALSTORAGE 🚨
+      indexedDB.deleteDatabase("YonkeAutoPartsDB");
+      indexedDB.deleteDatabase("yonke_db");
+      indexedDB.deleteDatabase("yonke_pwa_db");
+      localStorage.clear();
+      sessionStorage.clear();
 
       // 1. Intentar cargar desde localStorage
       const cachedParts = localStorage.getItem(STORAGE_KEY_PARTS);
