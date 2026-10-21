@@ -49,33 +49,10 @@ class YonkeDB {
           this.persist();
         }
       } else {
-        // Inicializar con los datos precargados del yonke
         this.vehicles = Array.isArray(INITIAL_VEHICLES) ? [...INITIAL_VEHICLES] : [];
-        this.parts = Array.isArray(INITIAL_PARTS) ? [...INITIAL_PARTS] : [];
-        this.expenses = Array.isArray(INITIAL_EXPENSES) ? [...INITIAL_EXPENSES] : [];
-        
-        // Generar ventas históricas iniciales a partir de las piezas ya marcadas como VENDIDAS
+        this.parts = []; // Limpio en 0 para que no cargue la basura vieja
+        this.expenses = [];
         this.sales = [];
-        this.parts.forEach(p => {
-          if (p.estado === "VENDIDO" && p.venta_final && p.venta_final > 0) {
-            this.sales.push({
-              id: "sale-hist-" + p.id,
-              pieza_id: p.id,
-              pieza_nombre: p.pieza,
-              vehiculo_origen: p.vehiculo_origen,
-              precio_base: p.precio_base,
-              precio_minimo: p.precio_minimo,
-              monto_cobrado: p.venta_final,
-              caja_a: Number((p.venta_final * 0.80).toFixed(2)),
-              caja_b: Number((p.venta_final * 0.20).toFixed(2)),
-              fecha: p.fecha_venta || "2026-01-01",
-              hora: "12:00:00",
-              tipo: "historica",
-              notas: p.observacion || ""
-            });
-          }
-        });
-
         this.persist();
       }
 
