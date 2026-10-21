@@ -5,14 +5,14 @@ const CLOUD_ANON_KEY = "yonke_supabase_anon_key";
 window.YonkeCloudConfig = {
   get() {
     return {
-      url: (localStorage.getItem(CLOUD_URL_KEY) || "").trim(),
-      anonKey: (localStorage.getItem(CLOUD_ANON_KEY) || "").trim()
+      url: (localStorage.getItem(CLOUD_URL_KEY) || "https://lkivtjzcemvinymxrrvv.supabase.co").trim(),
+      anonKey: (localStorage.getItem(CLOUD_ANON_KEY) || "sb_publishable_kHPdqpQlRfRbj0vp8YTqYw_dKp1tImK").trim()
     };
   },
 
   save(url, anonKey) {
-    localStorage.setItem(CLOUD_URL_KEY, (url || "").trim());
-    localStorage.setItem(CLOUD_ANON_KEY, (anonKey || "").trim());
+    if (url) localStorage.setItem(CLOUD_URL_KEY, url.trim());
+    if (anonKey) localStorage.setItem(CLOUD_ANON_KEY, anonKey.trim());
   },
 
   isConfigured() {
