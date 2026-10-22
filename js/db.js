@@ -18,41 +18,66 @@ class YonkeDB {
 
   async init() {
     try {
-      // 🚨 LIMPIEZA TOTAL FORZADA DE INDEXEDDB Y LOCALSTORAGE 🚨
-      indexedDB.deleteDatabase("YonkeAutoPartsDB");
-      indexedDB.deleteDatabase("yonke_db");
-      indexedDB.deleteDatabase("yonke_pwa_db");
-      localStorage.clear();
-      sessionStorage.clear();
+      this.initialized = false;
+      
+      // 1. INTENTO PRINCIPAL: Descargar directamente de la Nube (Supabase) si hay conexión y cliente configurado
+      let cloudLoaded = false;
+      if (window.yonkeSupabaseClient && navigator.onLine) {
+        try {
+          console.log("Conectando con Supabase para descargar inventario en vivo...");
+          const [partsRes, vehiclesRes, salesRes, expensesRes] = await Promise.all([
+            window.yonkeSupabaseClient.from("yonke_parts").select("*"),
+            window.yonkeSupabaseClient.from("yonke_vehicles").select("*"),
+            window.yonkeSupabaseClient.from("yonke_sales").select("*"),
+            window.yonkeSupabaseClient.from("yonke_expenses").select("*")
+          ]);
 
-      // 1. Intentar cargar desde localStorage
-      const cachedParts = localStorage.getItem(STORAGE_KEY_PARTS);
-      const cachedVehicles = localStorage.getItem(STORAGE_KEY_VEHICLES);
-      const cachedSales = localStorage.getItem(STORAGE_KEY_SALES);
-      const cachedExpenses = localStorage.getItem(STORAGE_KEY_EXPENSES);
+          if (!partsRes.error && Array.isArray(partsRes.data) && partsRes.data.length > 0) {
+            this.parts = partsRes.data;
+            this.vehicles = !vehiclesRes.error && Array.isArray(vehiclesRes.data) ? vehiclesRes.data : [];
+            this.sales = !salesRes.error && Array.isArray(salesRes.data) ? salesRes.data : [];
+            this.expenses = !expensesRes.error && Array.isArray(expensesRes.data) ? expensesRes.data : [];
+            
+            // Guardar copia fresca en local para respaldar futuras consultas offline
+            this.persist();
+            cloudLoaded = true;
+            console.log(`✅ Inventario cargado exitosamente desde la nube de Supabase (${this.parts.length} piezas).`);
+          }
+        } catch (cloudErr) {
+          console.warn("No se pudo conectar a la nube en el arranque, usando respaldo local:", cloudErr);
+        }
+      }
 
-      if (cachedParts && cachedVehicles) {
-        this.parts = JSON.parse(cachedParts);
-        this.vehicles = JSON.parse(cachedVehicles);
-        this.sales = cachedSales ? JSON.parse(cachedSales) : [];
-        this.expenses = cachedExpenses ? JSON.parse(cachedExpenses) : [];
+      // 2. RESPALDO LOCAL: Si no cargó de la nube (por falta de internet o primera vez sin red), usa localStorage / IndexedDB
+      if (!cloudLoaded) {
+        const cachedParts = localStorage.getItem(STORAGE_KEY_PARTS);
+        const cachedVehicles = localStorage.getItem(STORAGE_KEY_VEHICLES);
+        const cachedSales = localStorage.getItem(STORAGE_KEY_SALES);
+        const cachedExpenses = localStorage.getItem(STORAGE_KEY_EXPENSES);
 
-        // Limpieza preventiva de seguridad de filas de resumen o fórmulas importadas erróneamente
-        const prevPartsLen = this.parts.length;
-        this.parts = this.parts.filter(p => {
-          if (!p || !p.pieza) return false;
-          const c = String(p.pieza).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[:*#\-]/g, " ").trim();
-          const bad = ["RETORNO DE INVERSION", "GANANCIA", "COSTO", "COSTO TOTAL", "TOTAL", "TOTAL GENERAL", "SUBTOTAL", "UTILIDAD", "MARGEN", "ROI", "RESUMEN"];
-          return !bad.some(k => c === k || c.startsWith(k + " ") || c.endsWith(" " + k));
-        });
-        if (this.parts.length !== prevPartsLen) {
+        if (cachedParts && cachedVehicles) {
+          this.parts = JSON.parse(cachedParts);
+          this.vehicles = JSON.parse(cachedVehicles);
+          this.sales = cachedSales ? JSON.parse(cachedSales) : [];
+          this.expenses = cachedExpenses ? JSON.parse(cachedExpenses) : [];
+        } else {
+          this.vehicles = Array.isArray(INITIAL_VEHICLES) ? [...INITIAL_VEHICLES] : [];
+          this.parts = Array.isArray(INITIAL_PARTS) ? [...INITIAL_PARTS] : [];
+          this.expenses = Array.isArray(INITIAL_EXPENSES) ? [...INITIAL_EXPENSES] : [];
+          this.sales = [];
           this.persist();
         }
-      } else {
-        this.vehicles = Array.isArray(INITIAL_VEHICLES) ? [...INITIAL_VEHICLES] : [];
-        this.parts = []; // Limpio en 0 para que no cargue la basura vieja
-        this.expenses = [];
-        this.sales = [];
+      }
+
+      // Limpieza preventiva de seguridad de filas de resumen o fórmulas importadas erróneamente
+      const prevPartsLen = this.parts.length;
+      this.parts = this.parts.filter(p => {
+        if (!p || !p.pieza) return false;
+        const c = String(p.pieza).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[:*#\-]/g, " ").trim();
+        const bad = ["RETORNO DE INVERSION", "GANANCIA", "COSTO", "COSTO TOTAL", "TOTAL", "TOTAL GENERAL", "SUBTOTAL", "UTILIDAD", "MARGEN", "ROI", "RESUMEN"];
+        return !bad.some(k => c === k || c.startsWith(k + " ") || c.endsWith(" " + k));
+      });
+      if (this.parts.length !== prevPartsLen) {
         this.persist();
       }
 
@@ -68,7 +93,7 @@ class YonkeDB {
       this.persist();
 
       this.initialized = true;
-      if (window.yonkeSync) {
+      if (window.yonkeSync && typeof window.yonkeSync.start === "function") {
         window.yonkeSync.start().catch((e) => console.warn("Sync:", e));
       }
       return true;

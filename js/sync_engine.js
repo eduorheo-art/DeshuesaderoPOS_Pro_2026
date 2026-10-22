@@ -56,15 +56,7 @@ class YonkeSyncEngine {
     this.started = true;
 
     if (window.yonkeLocalStore) {
-      await window.yonkeLocalStore.init();
-      // 🛑 DESTRUIR EL SNAPSHOT VIEJO DE DEXIE QUE TIENE LA BASURA
-      try {
-        if (window.yonkeLocalStore.db && window.yonkeLocalStore.db.snapshot) {
-          await window.yonkeLocalStore.db.snapshot.clear();
-        }
-      } catch (e) {
-        console.warn("No se pudo limpiar snapshot de Dexie:", e);
-      }
+      await window.yonkeLocalStore.init();      
     }
 
     window.addEventListener("online", () => this.flushQueue());
