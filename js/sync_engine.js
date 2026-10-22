@@ -57,16 +57,13 @@ class YonkeSyncEngine {
 
     if (window.yonkeLocalStore) {
       await window.yonkeLocalStore.init();
-      const snap = await window.yonkeLocalStore.loadSnapshot();
-      if (snap && window.yonkeDB && Array.isArray(snap.parts) && snap.parts.length) {
-        const localParts = window.yonkeDB.parts || [];
-        if (!localParts.length) {
-          window.yonkeDB.parts = snap.parts;
-          window.yonkeDB.vehicles = snap.vehicles || [];
-          window.yonkeDB.sales = snap.sales || [];
-          window.yonkeDB.expenses = snap.expenses || [];
-          window.yonkeDB.persist();
+      // 🛑 DESTRUIR EL SNAPSHOT VIEJO DE DEXIE QUE TIENE LA BASURA
+      try {
+        if (window.yonkeLocalStore.db && window.yonkeLocalStore.db.snapshot) {
+          await window.yonkeLocalStore.db.snapshot.clear();
         }
+      } catch (e) {
+        console.warn("No se pudo limpiar snapshot de Dexie:", e);
       }
     }
 
