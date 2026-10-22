@@ -33,16 +33,27 @@ class YonkeDB {
           ]);
 
           if (!partsRes.error && Array.isArray(partsRes.data) && partsRes.data.length > 0) {
-            this.parts = partsRes.data;
+            this.parts = partsRes.data.map(p => ({
+              id: p.id,
+              vehiculo_origen: p.vehiculo_origen || p["MODELO"] || "Sin vehículo",
+              anio: p.anio || p["AÑO"] || "",
+              pieza: p.pieza || p["PIEZA"] || "Pieza sin nombre",
+              estado: p.estado || p["ESTADO"] || "En existencia",
+              precio_base: Number(p.precio_base !== undefined ? p.precio_base : p["PRECIO (BASE)"]) || 0,
+              precio_minimo: Number(p.precio_minimo !== undefined ? p.precio_minimo : p["PRECIO (MINIMO)"]) || 0,
+              cantidad: p.cantidad !== undefined ? p.cantidad : (p["CANTIDAD"] !== undefined ? p["CANTIDAD"] : 1),
+              venta_final: p.venta_final !== undefined ? p.venta_final : p["VENTA FINAL"],
+              fecha_venta: p.fecha_venta || p["FECHA DE VENTA"] || null,
+              observacion: p.observacion || p["OBSERVACION"] || "",
+              compatibilidad: p.compatibilidad || p["COMPATIBILIDAD (OTROS)"] || "",
+              fotos: Array.isArray(p.fotos) ? p.fotos : []
+            }));
+    
             this.vehicles = !vehiclesRes.error && Array.isArray(vehiclesRes.data) ? vehiclesRes.data : [];
             this.sales = !salesRes.error && Array.isArray(salesRes.data) ? salesRes.data : [];
             this.expenses = !expensesRes.error && Array.isArray(expensesRes.data) ? expensesRes.data : [];
-            
-            // Guardar copia fresca en local para respaldar futuras consultas offline
-            this.persist();
-            cloudLoaded = true;
-            console.log(`✅ Inventario cargado exitosamente desde la nube de Supabase (${this.parts.length} piezas).`);
           }
+          
         } catch (cloudErr) {
           console.warn("No se pudo conectar a la nube en el arranque, usando respaldo local:", cloudErr);
         }
