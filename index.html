@@ -1858,80 +1858,52 @@ class YonkeDB {
   }
 
   async init() {
-    try {
-      this.initialized = false;
-      
-      // 1. INTENTO PRINCIPAL: Descargar directamente de la Nube (Supabase) si hay conexión y cliente configurado
-      let cloudLoaded = false;
-      if (window.yonkeSupabaseClient && navigator.onLine) {
         try {
-          console.log("Conectando con Supabase para descargar inventario en vivo...");
-          const [partsRes, vehiclesRes, salesRes, expensesRes] = await Promise.all([
-            window.yonkeSupabaseClient.from("yonke_parts").select("*"),
-            window.yonkeSupabaseClient.from("yonke_vehicles").select("*"),
-            window.yonkeSupabaseClient.from("yonke_sales").select("*"),
-            window.yonkeSupabaseClient.from("yonke_expenses").select("*")
-          ]);
+          this.initialized = false;
+          let cloudLoaded = false;
+          if (window.yonkeSupabaseClient && navigator.onLine) {
+            try {
+              console.log("Conectando con Supabase para descargar inventario en vivo...");
+              const [partsRes, vehiclesRes, salesRes, expensesRes] = await Promise.all([
+                window.yonkeSupabaseClient.from("yonke_parts").select("*"),
+                window.yonkeSupabaseClient.from("yonke_vehicles").select("*"),
+                window.yonkeSupabaseClient.from("yonke_sales").select("*"),
+                window.yonkeSupabaseClient.from("yonke_expenses").select("*")
+              ]);
 
-          if (!partsRes.error && Array.isArray(partsRes.data) && partsRes.data.length > 0) {
-            this.parts = partsRes.data;
-            this.vehicles = !vehiclesRes.error && Array.isArray(vehiclesRes.data) ? vehiclesRes.data : [];
-            this.sales = !salesRes.error && Array.isArray(salesRes.data) ? salesRes.data : [];
-            this.expenses = !expensesRes.error && Array.isArray(expensesRes.data) ? expensesRes.data : [];
-            
-            // Guardar copia fresca en local para respaldar futuras consultas offline
-            this.persist();
-            cloudLoaded = true;
-            console.log(`✅ Inventario cargado exitosamente desde la nube de Supabase (${this.parts.length} piezas).`);
+              if (!partsRes.error && Array.isArray(partsRes.data) && partsRes.data.length > 0) {
+                this.parts = partsRes.data.map(p => ({
+                  id: p.id,
+                  vehiculo_origen: p.vehiculo_origen || p["MODELO"] || "Sin vehículo",
+                  anio: p.anio || p["AÑO"] || "",
+                  pieza: p.pieza || p["PIEZA"] || "Pieza sin nombre",
+                  estado: p.estado || p["ESTADO"] || "En existencia",
+                  precio_base: Number(p.precio_base !== undefined ? p.precio_base : p["PRECIO (BASE)"]) || 0,
+                  precio_minimo: Number(p.precio_minimo !== undefined ? p.precio_minimo : p["PRECIO (MINIMO)"]) || 0,
+                  cantidad: p.cantidad !== undefined ? p.cantidad : (p["CANTIDAD"] !== undefined ? p["CANTIDAD"] : 1),
+                  venta_final: p.venta_final !== undefined ? p.venta_final : p["VENTA FINAL"],
+                  fecha_venta: p.fecha_venta || p["FECHA DE VENTA"] || null,
+                  observacion: p.observacion || p["OBSERVACION"] || "",
+                  compatibilidad: p.compatibilidad || p["COMPATIBILIDAD (OTROS)"] || "",
+                  fotos: Array.isArray(p.fotos) ? p.fotos : []
+                }));
+
+                this.vehicles = !vehiclesRes.error && Array.isArray(vehiclesRes.data) ? vehiclesRes.data : [];
+                this.sales = !salesRes.error && Array.isArray(salesRes.data) ? salesRes.data : [];
+                this.expenses = !expensesRes.error && Array.isArray(expensesRes.data) ? expensesRes.data : [];
+                
+                this.persist();
+                cloudLoaded = true;
+                console.log(`✅ Inventario cargado y mapeado desde Supabase (${this.parts.length} piezas).`);
+              }
+            } catch (cloudErr) {
+              console.warn("No se pudo conectar a la nube en el arranque, usando respaldo local:", cloudErr);
+            }
           }
-        } catch (cloudErr) {
-          console.warn("No se pudo conectar a la nube en el arranque, usando respaldo local:", cloudErr);
+        } catch (err) {
+          console.error("Error en init:", err);
         }
       }
-
-      // 2. RESPALDO LOCAL: Si no cargó de la nube (por falta de internet o primera vez sin red), usa localStorage / IndexedDB
-      if (!cloudLoaded) {
-        const cachedParts = localStorage.getItem(STORAGE_KEY_PARTS);
-        const cachedVehicles = localStorage.getItem(STORAGE_KEY_VEHICLES);
-        const cachedSales = localStorage.getItem(STORAGE_KEY_SALES);
-        const cachedExpenses = localStorage.getItem(STORAGE_KEY_EXPENSES);
-
-        if (cachedParts && cachedVehicles) {
-          this.parts = JSON.parse(cachedParts);
-          this.vehicles = JSON.parse(cachedVehicles);
-          this.sales = cachedSales ? JSON.parse(cachedSales) : [];
-          this.expenses = cachedExpenses ? JSON.parse(cachedExpenses) : [];
-        } else {
-          this.vehicles = Array.isArray(INITIAL_VEHICLES) ? [...INITIAL_VEHICLES] : [];
-          this.parts = Array.isArray(INITIAL_PARTS) ? [...INITIAL_PARTS] : [];
-          this.expenses = Array.isArray(INITIAL_EXPENSES) ? [...INITIAL_EXPENSES] : [];
-          this.sales = [];
-          this.persist();
-        }
-      }
-
-      // Limpieza preventiva de seguridad de filas de resumen o fórmulas importadas erróneamente
-      const prevPartsLen = this.parts.length;
-      this.parts = this.parts.filter(p => {
-        if (!p || !p.pieza) return false;
-        const c = String(p.pieza).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[:*#\-]/g, " ").trim();
-        const bad = ["RETORNO DE INVERSION", "GANANCIA", "COSTO", "COSTO TOTAL", "TOTAL", "TOTAL GENERAL", "SUBTOTAL", "UTILIDAD", "MARGEN", "ROI", "RESUMEN"];
-        return !bad.some(k => c === k || c.startsWith(k + " ") || c.endsWith(" " + k));
-      });
-      if (this.parts.length !== prevPartsLen) {
-        this.persist();
-      }
-
-      this.initialized = true;
-      if (window.yonkeSync && typeof window.yonkeSync.start === "function") {
-        window.yonkeSync.start().catch((e) => console.warn("Sync:", e));
-      }
-      return true;
-    } catch (err) {
-      console.error("Error al inicializar base de datos:", err);
-      return false;
-    }
-  }
 
   persist() {
     try {
