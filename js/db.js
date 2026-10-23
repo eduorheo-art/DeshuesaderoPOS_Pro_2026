@@ -22,6 +22,15 @@ class YonkeDB {
       
       // 1. INTENTO PRINCIPAL: Descargar directamente de la Nube (Supabase) si hay conexión y cliente configurado
       let cloudLoaded = false;
+
+      // Asegurar cliente de Supabase si no está inicializado globalmente
+      if (!window.yonkeSupabaseClient && typeof supabase !== "undefined" && supabase.createClient) {
+        window.yonkeSupabaseClient = supabase.createClient(
+          "https://lkivtjzcemvinymxrrvv.supabase.co",
+          "sb_publishable_kHPdqpQlRfRbj0vp8YTqYw_dKp1tImK"
+        );
+      }
+
       if (window.yonkeSupabaseClient && navigator.onLine) {
         try {
           console.log("Conectando con Supabase para descargar inventario en vivo...");
