@@ -9,6 +9,26 @@ class FinancesManager {
   }
 
   attachEvents() {
+    document.querySelectorAll("[data-finance-box-toggle]").forEach(box => {
+      const toggleBox = () => {
+        const key = box.getAttribute("data-finance-box-toggle");
+        const opening = box.getAttribute("aria-expanded") !== "true";
+        document.querySelectorAll("[data-finance-box-toggle]").forEach(item => item.setAttribute("aria-expanded", "false"));
+        document.querySelectorAll("[data-finance-box-content]").forEach(panel => panel.classList.add("hidden"));
+        if (opening) {
+          box.setAttribute("aria-expanded", "true");
+          document.querySelectorAll(`[data-finance-box-content="${key}"]`).forEach(panel => panel.classList.remove("hidden"));
+        }
+      };
+      box.addEventListener("click", toggleBox);
+      box.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggleBox();
+        }
+      });
+    });
+
     const expenseForm = document.getElementById("expense-form");
     if (expenseForm) {
       expenseForm.addEventListener("submit", (e) => {
@@ -37,6 +57,39 @@ class FinancesManager {
   updateUI() {
     const data = window.yonkeDB.getFinancesSummary();
     if (!data) return;
+    const report = window.yonkeDB.getBusinessFinanceSummary();
+    const money = value => `$${Number(value || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const setAmount = (id, value) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = money(value);
+    };
+    const setText = (id, value) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = value;
+    };
+
+    setAmount("finance-business-sales", report.revenue);
+    setText("finance-business-sales-count", `${report.saleCount} ventas (${report.inventoryOnlySalesCount} recuperadas de Inventario)`);
+    setAmount("finance-business-cogs", report.costOfGoodsSold);
+    setText("finance-business-cogs-coverage", `${report.cogsAssignedSales} de ${report.saleCount} ventas con costo unitario asignado`);
+    setText("finance-business-gross", report.cogsAssignedSales
+      ? money(report.cogsAssignedRevenue - report.costOfGoodsSold)
+      : "No calculable");
+    setAmount("finance-business-acquisitions", report.vehicleAcquisitions);
+    setText("finance-business-vehicle-count", `${report.vehiclesWithRecordedCost} de ${report.vehicleCount} vehículos en catálogo con costo; ${report.inventoryDonorCount} donadores detectados en inventario`);
+    setAmount("finance-business-operations", report.recordedExpenses);
+    setAmount("finance-business-moto", report.assumedMotoTotal);
+    const monthRange = report.firstActivityDate
+      ? `${report.firstActivityDate.slice(0, 7)} a ${new Date().toISOString().slice(0, 7)}`
+      : "Sin periodo registrado";
+    setText("finance-business-moto-period", `${report.assumedMotoMonths} meses × $2,066 desde ${monthRange}; pagos registrados: ${money(report.actualMotoPaid)}`);
+    setAmount("finance-business-net", report.partialMovementDifference);
+    setText("finance-business-net-profit", "No calculable");
+    const dateRange = report.firstActivityDate
+      ? `${report.firstActivityDate} a ${report.lastActivityDate}`
+      : "sin fechas financieras";
+    setText("finance-business-coverage",
+      `Periodo detectado: ${dateRange}. Ventas: ${report.saleCount} (${report.ledgerSalesCount} en historial y ${report.inventoryOnlySalesCount} recuperadas de Inventario). Costos de mercancía asignados: ${report.cogsAssignedSales}/${report.saleCount}; vehículos en catálogo con costo: ${report.vehiclesWithRecordedCost}/${report.vehicleCount}; donadores detectados en inventario: ${report.inventoryDonorCount}; gastos capturados: ${data.gastos.length}. La mensualidad de moto es una estimación, no un registro comprobante.`);
 
     // Métricas Generales
     const totalSalesEl = document.getElementById("finance-total-sales");
@@ -45,6 +98,8 @@ class FinancesManager {
     // Caja A (80%)
     const cajaATotalEl = document.getElementById("finance-caja-a-total");
     if (cajaATotalEl) cajaATotalEl.textContent = `$${data.cajaA.saldoDisponible.toLocaleString()}`;
+    const cajaAAcquisitionsEl = document.getElementById("finance-caja-a-acquisitions");
+    if (cajaAAcquisitionsEl) cajaAAcquisitionsEl.textContent = money(data.cajaA.comprasVehiculos);
 
     // Caja B (20%)
     const cajaBTotalEl = document.getElementById("finance-caja-b-bruto");
@@ -68,9 +123,9 @@ class FinancesManager {
     const motoProgressEl = document.getElementById("finance-moto-progress-bar");
     const motoStatusEl = document.getElementById("finance-moto-status");
 
-    if (motoPagadoEl) motoPagadoEl.textContent = `$${data.cajaB.pagadoMoto.toLocaleString()} / $2,066`;
+    if (motoPagadoEl) motoPagadoEl.textContent = `${money(data.cajaA.pagoMotoMes)} / $2,066`;
     if (motoProgressEl) {
-      const pct = Math.min(100, Math.round((data.cajaB.pagadoMoto / 2066) * 100));
+      const pct = Math.min(100, Math.round((data.cajaA.pagoMotoMes / 2066) * 100));
       motoProgressEl.style.width = `${pct}%`;
       if (pct >= 100) {
         motoProgressEl.className = "h-3 rounded-full bg-emerald-500 transition-all duration-500";
@@ -79,10 +134,10 @@ class FinancesManager {
       }
     }
     if (motoStatusEl) {
-      if (data.cajaB.motoCubierta) {
+      if (data.cajaA.pagoMotoMes >= 2066) {
         motoStatusEl.innerHTML = `<span class="text-xs font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">✅ Mensualidad Cubierta</span>`;
       } else {
-        const falta = 2066 - data.cajaB.pagadoMoto;
+        const falta = 2066 - data.cajaA.pagoMotoMes;
         motoStatusEl.innerHTML = `<span class="text-xs font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">⏳ Falta: $${falta.toLocaleString()}</span>`;
       }
     }
@@ -114,6 +169,18 @@ class FinancesManager {
         badge = `<span class="px-2 py-0.5 text-xs font-semibold rounded bg-amber-100 text-amber-800">⛽ Gasolina</span>`;
       } else if (e.categoria === "comida") {
         badge = `<span class="px-2 py-0.5 text-xs font-semibold rounded bg-emerald-100 text-emerald-800">🍔 Comida</span>`;
+      } else {
+        const categoryLabels = {
+          herramienta: "🔧 Herramienta",
+          renta: "🏠 Renta",
+          luz: "💡 Electricidad",
+          insumos: "📦 Insumos",
+          mantenimiento: "🧰 Mantenimiento",
+          entregas: "🛵 Entregas"
+        };
+        if (categoryLabels[e.categoria]) {
+          badge = `<span class="px-2 py-0.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">${categoryLabels[e.categoria]}</span>`;
+        }
       }
 
       rowsHtml += `
@@ -198,11 +265,12 @@ class FinancesManager {
     if (notesInput) notesInput.value = "";
 
     this.updateUI();
-    alert(`✅ Gasto de $${monto.toLocaleString()} registrado y descontado de Caja B.`);
+    const expenseBox = categorySelect && categorySelect.value === "moto" ? "Caja A" : "Caja B";
+    alert(`✅ Gasto de $${monto.toLocaleString()} registrado y descontado de ${expenseBox}.`);
   }
 
   quickPayMoto() {
-    const confirmPay = confirm("¿Registrar el pago mensual de la moto por $2,066.00 descontado de Caja B?");
+    const confirmPay = confirm("¿Registrar el pago mensual de la moto por $2,066.00 descontado de Caja A?");
     if (!confirmPay) return;
 
     window.yonkeDB.addExpense({

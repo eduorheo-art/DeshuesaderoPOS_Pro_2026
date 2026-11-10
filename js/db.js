@@ -14,12 +14,15 @@ class YonkeDB {
     this.sales = [];
     this.expenses = [];
     this.initialized = false;
+    this.ownerId = null;
+    this.storageKeys = null;
   }
 
   async init() {
     try {
       this.initialized = false;
-      
+      const cloudConfigured = window.YonkeCloudConfig?.isConfigured();
+
       // 1. INTENTO PRINCIPAL: Descargar directamente de la Nube (Supabase) si hay conexión y cliente configurado
       let cloudLoaded = false;
 
@@ -27,9 +30,34 @@ class YonkeDB {
       if (!window.yonkeSupabaseClient && typeof supabase !== "undefined" && supabase.createClient) {
         window.yonkeSupabaseClient = supabase.createClient(
           "https://lkivtjzcemvinymxrrvv.supabase.co",
-          "sb_publishable_kHPdqpQlRfRbj0vp8YTqYw_dKp1tImK"
+          "sb_publishable_kHPdqpQlRfRbj0vp8YTqYw_dKp1tImK",
+          { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }
         );
       }
+
+      if (cloudConfigured || window.yonkeSupabaseClient) {
+        if (!window.yonkeSupabaseClient) throw new Error("Supabase está configurado pero no hay cliente de autenticación.");
+        const { data, error } = await window.yonkeSupabaseClient.auth.getSession();
+        if (error) throw error;
+        this.ownerId = data.session?.user?.id || null;
+        if (!this.ownerId) {
+          this.parts = [];
+          this.vehicles = [];
+          this.sales = [];
+          this.expenses = [];
+          throw new Error("Inicia sesión antes de cargar datos privados.");
+        }
+      } else {
+        this.ownerId = "offline";
+      }
+
+      this.storageKeys = {
+        parts: `${STORAGE_KEY_PARTS}:${this.ownerId}`,
+        vehicles: `${STORAGE_KEY_VEHICLES}:${this.ownerId}`,
+        sales: `${STORAGE_KEY_SALES}:${this.ownerId}`,
+        expenses: `${STORAGE_KEY_EXPENSES}:${this.ownerId}`
+      };
+      if (window.yonkeLocalStore) window.yonkeLocalStore.setOwner(this.ownerId);
 
       if (window.yonkeSupabaseClient && navigator.onLine) {
         try {
@@ -41,7 +69,13 @@ class YonkeDB {
             window.yonkeSupabaseClient.from("yonke_expenses").select("*")
           ]);
 
-          if (!partsRes.error && Array.isArray(partsRes.data) && partsRes.data.length > 0) {
+          const failedQuery = [partsRes, vehiclesRes, salesRes, expensesRes].find(result => result.error);
+          if (failedQuery) throw failedQuery.error;
+          if ([partsRes, vehiclesRes, salesRes, expensesRes].some(result => !Array.isArray(result.data))) {
+            throw new Error("Supabase devolvió datos inválidos.");
+          }
+
+          if (partsRes.data.length || vehiclesRes.data.length || salesRes.data.length || expensesRes.data.length) {
             this.parts = partsRes.data.map(p => ({
               id: p.id,
               vehiculo_origen: p.vehiculo_origen || p["MODELO"] || "Sin vehículo",
@@ -51,16 +85,25 @@ class YonkeDB {
               precio_base: Number(p.precio_base !== undefined ? p.precio_base : p["PRECIO (BASE)"]) || 0,
               precio_minimo: Number(p.precio_minimo !== undefined ? p.precio_minimo : p["PRECIO (MINIMO)"]) || 0,
               cantidad: p.cantidad !== undefined ? p.cantidad : (p["CANTIDAD"] !== undefined ? p["CANTIDAD"] : 1),
+              costo_mercancia_unitario: p.costo_mercancia_unitario !== undefined && p.costo_mercancia_unitario !== null && p.costo_mercancia_unitario !== "" ? Number(p.costo_mercancia_unitario) : null,
               venta_final: p.venta_final !== undefined ? p.venta_final : p["VENTA FINAL"],
-              fecha_venta: p.fecha_venta || p["FECHA DE VENTA"] || null,
+              fecha_venta: p.fecha_venta || p["FECHA VENTA"] || p["FECHA DE VENTA"] || null,
               observacion: p.observacion || p["OBSERVACION"] || "",
               compatibilidad: p.compatibilidad || p["COMPATIBILIDAD (OTROS)"] || "",
+              demanda: p.demanda || p["DEMANDA"] || "",
+              busquedas_info: p.busquedas_info || p["BUSQUEDAS_INFO"] || "",
               fotos: Array.isArray(p.fotos) ? p.fotos : []
             }));
     
-            this.vehicles = !vehiclesRes.error && Array.isArray(vehiclesRes.data) ? vehiclesRes.data : [];
+            this.vehicles = !vehiclesRes.error && Array.isArray(vehiclesRes.data)
+              ? vehiclesRes.data.map(vehicle => ({
+                ...vehicle,
+                fotos: Array.isArray(vehicle.fotos) ? vehicle.fotos : []
+              }))
+              : [];
             this.sales = !salesRes.error && Array.isArray(salesRes.data) ? salesRes.data : [];
             this.expenses = !expensesRes.error && Array.isArray(expensesRes.data) ? expensesRes.data : [];
+            cloudLoaded = true;
           }
           
         } catch (cloudErr) {
@@ -70,10 +113,10 @@ class YonkeDB {
 
       // 2. RESPALDO LOCAL: Si no cargó de la nube (por falta de internet o primera vez sin red), usa localStorage / IndexedDB
       if (!cloudLoaded) {
-        const cachedParts = localStorage.getItem(STORAGE_KEY_PARTS);
-        const cachedVehicles = localStorage.getItem(STORAGE_KEY_VEHICLES);
-        const cachedSales = localStorage.getItem(STORAGE_KEY_SALES);
-        const cachedExpenses = localStorage.getItem(STORAGE_KEY_EXPENSES);
+        const cachedParts = localStorage.getItem(this.storageKeys.parts);
+        const cachedVehicles = localStorage.getItem(this.storageKeys.vehicles);
+        const cachedSales = localStorage.getItem(this.storageKeys.sales);
+        const cachedExpenses = localStorage.getItem(this.storageKeys.expenses);
 
         if (cachedParts && cachedVehicles) {
           this.parts = JSON.parse(cachedParts);
@@ -110,6 +153,11 @@ class YonkeDB {
       stampIfMissing(this.vehicles);
       stampIfMissing(this.sales);
       stampIfMissing(this.expenses);
+      if (this.ownerId !== "offline") {
+        [this.parts, this.vehicles, this.sales, this.expenses].forEach(records => {
+          records.forEach(record => { record.owner_id = this.ownerId; });
+        });
+      }
       this.persist();
 
       this.initialized = true;
@@ -125,10 +173,11 @@ class YonkeDB {
 
   persist() {
     try {
-      localStorage.setItem(STORAGE_KEY_PARTS, JSON.stringify(this.parts));
-      localStorage.setItem(STORAGE_KEY_VEHICLES, JSON.stringify(this.vehicles));
-      localStorage.setItem(STORAGE_KEY_SALES, JSON.stringify(this.sales));
-      localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(this.expenses));
+      if (!this.storageKeys) return;
+      localStorage.setItem(this.storageKeys.parts, JSON.stringify(this.parts));
+      localStorage.setItem(this.storageKeys.vehicles, JSON.stringify(this.vehicles));
+      localStorage.setItem(this.storageKeys.sales, JSON.stringify(this.sales));
+      localStorage.setItem(this.storageKeys.expenses, JSON.stringify(this.expenses));
       if (window.yonkeLocalStore) {
         window.yonkeLocalStore.saveSnapshot(this);
       }
@@ -139,6 +188,7 @@ class YonkeDB {
 
   stampRecord(record) {
     if (!record) return record;
+    if (this.ownerId && this.ownerId !== "offline") record.owner_id = this.ownerId;
     if (window.yonkeSync) return window.yonkeSync.stamp(record);
     record.updated_at = new Date().toISOString();
     const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
@@ -168,6 +218,7 @@ class YonkeDB {
       fecha_ingreso: vehicleData.fecha_ingreso || new Date().toISOString().split("T")[0],
       color: vehicleData.color || "No especificado",
       vin: vehicleData.vin || "",
+      fotos: Array.isArray(vehicleData.fotos) ? vehicleData.fotos : [],
       notas: vehicleData.notas || ""
     };
     this.stampRecord(newVehicle);
@@ -183,11 +234,11 @@ class YonkeDB {
   }
 
   getPartById(id) {
-    return this.parts.find(p => p.id === id);
+    return this.parts.find(p => String(p.id) === String(id));
   }
 
   updatePart(id, updatedFields) {
-    const index = this.parts.findIndex(p => p.id === id);
+    const index = this.parts.findIndex(p => String(p.id) === String(id));
     if (index === -1) return null;
 
     const part = { ...this.parts[index], ...updatedFields };
@@ -223,10 +274,13 @@ class YonkeDB {
       precio_base: Number(partData.precio_base) || 0,
       precio_minimo: Number(partData.precio_minimo) || 0,
       cantidad: qty,
+      costo_mercancia_unitario: partData.costo_mercancia_unitario !== undefined && partData.costo_mercancia_unitario !== null && partData.costo_mercancia_unitario !== "" ? Number(partData.costo_mercancia_unitario) : null,
       venta_final: partData.venta_final !== null && partData.venta_final !== undefined && partData.venta_final !== "" ? Number(partData.venta_final) : null,
       fecha_venta: partData.fecha_venta || null,
       observacion: partData.observacion || "",
       compatibilidad: partData.compatibilidad || "",
+      demanda: partData.demanda || "",
+      busquedas_info: partData.busquedas_info || "",
       fotos: Array.isArray(partData.fotos) ? partData.fotos : [],
       ubicacion_patio: partData.ubicacion_patio || "Patio general"
     };
@@ -278,6 +332,7 @@ class YonkeDB {
       vehiculo_origen: part.vehiculo_origen,
       precio_base: part.precio_base,
       precio_minimo: part.precio_minimo,
+      costo_mercancia: Number.isFinite(Number(part.costo_mercancia_unitario)) && part.costo_mercancia_unitario !== null ? Number(part.costo_mercancia_unitario) : null,
       monto_cobrado: price,
       caja_a: cajaA,
       caja_b: cajaB,
@@ -375,6 +430,10 @@ class YonkeDB {
 
     if (sale) {
       sale.estado = "DEVUELTO";
+      sale.garantia_fecha = dateFormatted;
+      sale.garantia_hora = timeFormatted;
+      sale.garantia_motivo = reason;
+      sale.garantia_tipo = returnType;
       sale.notas = (sale.notas ? sale.notas + " | " : "") + `[Garantía Aplicada]: ${reason}`;
     }
 
@@ -438,25 +497,64 @@ class YonkeDB {
       totalCajaB_ingresos += Number(s.caja_b) || (monto * 0.20);
     });
 
-    // Gastos que salieron de Caja B
+    const normalizeSaleDate = value => {
+      if (!value) return "";
+      const text = String(value).trim();
+      const serial = Number(text);
+      if (/^\d{5}(?:\.\d+)?$/.test(text) && serial > 30000 && serial < 60000) {
+        return new Date(Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000).toISOString().slice(0, 10);
+      }
+      const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+      const dmy = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+      if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+      const date = new Date(text);
+      return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+    };
+    const recordedPartKeys = new Set(this.sales
+      .filter(s => Number(s.monto_cobrado) > 0 && s.pieza_id !== null && s.pieza_id !== undefined)
+      .map(s => `${s.pieza_id}|${normalizeSaleDate(s.fecha || s.fecha_venta)}`));
+    const recordedPartIds = new Set(this.sales
+      .filter(s => Number(s.monto_cobrado) > 0 && s.pieza_id !== null && s.pieza_id !== undefined)
+      .map(s => String(s.pieza_id)));
+    this.parts.forEach(part => {
+      const ventaFinal = Number(part.venta_final) || 0;
+      const partId = String(part.id);
+      const date = normalizeSaleDate(part.fecha_venta);
+      if (ventaFinal <= 0 || (date
+        ? recordedPartKeys.has(`${partId}|${date}`) || recordedPartKeys.has(`${partId}|`)
+        : recordedPartIds.has(partId))) return;
+      totalVendido += ventaFinal;
+      totalCajaA_ingresos += ventaFinal * 0.8;
+      totalCajaB_ingresos += ventaFinal * 0.2;
+    });
+
+    // Los pagos de moto y las compras de vehículos se cargan a Caja A.
     let totalGastosCajaB = 0;
     let pagadoMoto = 0;
+    let totalMotoPagado = 0;
     let sueldosRetirados = 0;
     let otrosGastos = 0;
+    const currentMonth = new Date().toISOString().slice(0, 7);
 
     this.expenses.forEach(e => {
       const monto = Number(e.monto) || 0;
-      totalGastosCajaB += monto;
-      if (e.categoria === "moto" || e.concepto.toLowerCase().includes("moto")) {
-        pagadoMoto += monto;
-      } else if (e.categoria === "sueldo" || e.concepto.toLowerCase().includes("sueldo")) {
-        sueldosRetirados += monto;
+      const isMoto = e.categoria === "moto" || (e.concepto || "").toLowerCase().includes("moto");
+      if (isMoto) {
+        totalMotoPagado += monto;
+        if ((e.fecha || "").startsWith(currentMonth)) pagadoMoto += monto;
       } else {
+        totalGastosCajaB += monto;
+      }
+      if (!isMoto && (e.categoria === "sueldo" || (e.concepto || "").toLowerCase().includes("sueldo"))) {
+        sueldosRetirados += monto;
+      } else if (!isMoto) {
         otrosGastos += monto;
       }
     });
 
-    const saldoCajaA = Number(totalCajaA_ingresos.toFixed(2));
+    const comprasVehiculos = this.vehicles.reduce((total, vehicle) => total + (Number(vehicle.costo) || 0), 0);
+    const saldoCajaA = Number((totalCajaA_ingresos - comprasVehiculos - totalMotoPagado).toFixed(2));
     const saldoCajaB_Bruto = Number(totalCajaB_ingresos.toFixed(2));
     const saldoCajaB_Neto = Number((saldoCajaB_Bruto - totalGastosCajaB).toFixed(2));
 
@@ -470,7 +568,10 @@ class YonkeDB {
       totalVendido: Number(totalVendido.toFixed(2)),
       cajaA: {
         ingresosTotales: Number(totalCajaA_ingresos.toFixed(2)),
-        saldoDisponible: saldoCajaA, // Fondo sagrado para comprar autos
+        saldoDisponible: saldoCajaA,
+        comprasVehiculos: Number(comprasVehiculos.toFixed(2)),
+        pagadoMoto: Number(totalMotoPagado.toFixed(2)),
+        pagoMotoMes: Number(pagadoMoto.toFixed(2)),
         porcentaje: 80
       },
       cajaB: {
@@ -487,6 +588,107 @@ class YonkeDB {
       },
       gastos: [...this.expenses],
       ventas: [...this.sales]
+    };
+  }
+
+  getBusinessFinanceSummary() {
+    const normalizeDate = value => {
+      if (!value) return "";
+      const text = String(value).trim();
+      const serial = Number(text);
+      if (/^\d{5}(?:\.\d+)?$/.test(text) && serial > 30000 && serial < 60000) {
+        return new Date(Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000).toISOString().slice(0, 10);
+      }
+      const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+      const dmy = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+      if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+      const date = new Date(text);
+      return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+    };
+    const partsById = new Map(this.parts.map(part => [String(part.id), part]));
+    const recordedKeys = new Set(this.sales
+      .filter(sale => Number(sale.monto_cobrado) > 0 && sale.pieza_id !== null && sale.pieza_id !== undefined)
+      .map(sale => `${sale.pieza_id}|${normalizeDate(sale.fecha || sale.fecha_venta)}`));
+    const recordedPartIds = new Set(this.sales
+      .filter(sale => Number(sale.monto_cobrado) > 0 && sale.pieza_id !== null && sale.pieza_id !== undefined)
+      .map(sale => String(sale.pieza_id)));
+    const transactions = this.sales
+      .filter(sale => Number(sale.monto_cobrado) > 0 && sale.tipo !== "garantia")
+      .map(sale => ({ sale, part: partsById.get(String(sale.pieza_id)) }));
+    this.parts.forEach(part => {
+      const date = normalizeDate(part.fecha_venta);
+      if ((Number(part.venta_final) || 0) <= 0 || (date
+        ? recordedKeys.has(`${part.id}|${date}`) || recordedKeys.has(`${part.id}|`)
+        : recordedPartIds.has(String(part.id)))) return;
+      transactions.push({
+        sale: { monto_cobrado: Number(part.venta_final), fecha: date, pieza_id: part.id },
+        part
+      });
+    });
+
+    let cogsAssignedSales = 0;
+    let cogsAssignedRevenue = 0;
+    let costOfGoodsSold = 0;
+    transactions.forEach(({ sale, part }) => {
+      const saleCost = sale.costo_mercancia;
+      const partCost = part && part.costo_mercancia_unitario;
+      const cost = saleCost !== null && saleCost !== undefined && saleCost !== "" && Number.isFinite(Number(saleCost))
+        ? Number(saleCost)
+        : partCost !== null && partCost !== undefined && partCost !== "" && Number.isFinite(Number(partCost))
+          ? Number(partCost)
+          : null;
+      if (cost === null || cost < 0) return;
+      cogsAssignedSales++;
+      cogsAssignedRevenue += Number(sale.monto_cobrado) || 0;
+      costOfGoodsSold += cost;
+    });
+
+    const vehicleAcquisitions = this.vehicles.reduce((sum, vehicle) => sum + (Number(vehicle.costo) || 0), 0);
+    const recordedExpenses = this.expenses.reduce((sum, expense) => sum + (Number(expense.monto) || 0), 0);
+    const motoPayments = this.expenses.filter(expense =>
+      expense.categoria === "moto" || (expense.concepto || "").toLowerCase().includes("moto")
+    );
+    const actualMotoPaid = motoPayments.reduce((sum, expense) => sum + (Number(expense.monto) || 0), 0);
+    const activityDates = [
+      ...transactions.map(({ sale, part }) => normalizeDate(sale.fecha || sale.fecha_venta || (part && part.fecha_venta))),
+      ...this.expenses.map(expense => normalizeDate(expense.fecha)),
+      ...this.vehicles.map(vehicle => normalizeDate(vehicle.fecha_ingreso))
+    ].filter(Boolean).sort();
+    const firstActivityDate = activityDates[0] || "";
+    const lastActivityDate = activityDates[activityDates.length - 1] || "";
+    const now = new Date();
+    const firstActivityMonth = firstActivityDate.slice(0, 7);
+    const monthCount = firstActivityMonth
+      ? Math.max(0, (now.getFullYear() * 12 + now.getMonth()) - (Number(firstActivityMonth.slice(0, 4)) * 12 + Number(firstActivityMonth.slice(5, 7)) - 1) + 1)
+      : 0;
+    const assumedMotoTotal = Math.max(0, monthCount * 2066 - actualMotoPaid);
+    const actualReportedSales = this.sales.reduce((sum, sale) => sum + (Number(sale.monto_cobrado) || 0), 0);
+    const legacyInventorySales = transactions.reduce((sum, { sale }) => sum + (Number(sale.monto_cobrado) || 0), 0)
+      - this.sales.filter(sale => Number(sale.monto_cobrado) > 0 && sale.tipo !== "garantia")
+        .reduce((sum, sale) => sum + (Number(sale.monto_cobrado) || 0), 0);
+
+    return {
+      revenue: Number((actualReportedSales + legacyInventorySales).toFixed(2)),
+      saleCount: transactions.length,
+      ledgerSalesCount: this.sales.filter(sale => Number(sale.monto_cobrado) > 0 && sale.tipo !== "garantia").length,
+      inventoryOnlySalesCount: Math.max(0, transactions.length - this.sales.filter(sale => Number(sale.monto_cobrado) > 0 && sale.tipo !== "garantia").length),
+      legacyInventorySaleCount: Math.max(0, transactions.length - this.sales.filter(sale => Number(sale.monto_cobrado) > 0 && sale.tipo !== "garantia").length),
+      costOfGoodsSold: Number(costOfGoodsSold.toFixed(2)),
+      cogsAssignedSales,
+      cogsAssignedRevenue: Number(cogsAssignedRevenue.toFixed(2)),
+      cogsMissingSales: Math.max(0, transactions.length - cogsAssignedSales),
+      vehicleAcquisitions: Number(vehicleAcquisitions.toFixed(2)),
+      vehiclesWithRecordedCost: this.vehicles.filter(vehicle => Number(vehicle.costo) > 0).length,
+      vehicleCount: this.vehicles.length,
+      inventoryDonorCount: new Set(this.parts.map(part => String(part.vehiculo_origen || "").trim()).filter(Boolean)).size,
+      recordedExpenses: Number(recordedExpenses.toFixed(2)),
+      actualMotoPaid: Number(actualMotoPaid.toFixed(2)),
+      assumedMotoTotal: Number(assumedMotoTotal.toFixed(2)),
+      assumedMotoMonths: monthCount,
+      firstActivityDate,
+      lastActivityDate,
+      partialMovementDifference: Number((actualReportedSales + legacyInventorySales - vehicleAcquisitions - recordedExpenses - assumedMotoTotal).toFixed(2))
     };
   }
 
@@ -524,7 +726,7 @@ class YonkeDB {
     vehicleParts.forEach(p => {
       if (p.estado === "VENDIDO") {
         piezasVendidasCount++;
-        totalVendidoAuto += Number(p.venta_final) || Number(p.precio_base) || 0;
+        totalVendidoAuto += Number(p.venta_final) || 0;
       } else {
         piezasEnExistenciaCount += (Number(p.cantidad) || 1);
         valorPotencialRestante += (Number(p.precio_base) * (Number(p.cantidad) || 1));
@@ -570,10 +772,9 @@ class YonkeDB {
 
   // Restablecer a fábrica (si se requiere)
   resetToDefault() {
-    localStorage.removeItem(STORAGE_KEY_PARTS);
-    localStorage.removeItem(STORAGE_KEY_VEHICLES);
-    localStorage.removeItem(STORAGE_KEY_SALES);
-    localStorage.removeItem(STORAGE_KEY_EXPENSES);
+    if (this.storageKeys) {
+      Object.values(this.storageKeys).forEach(key => localStorage.removeItem(key));
+    }
     return this.init();
   }
 }

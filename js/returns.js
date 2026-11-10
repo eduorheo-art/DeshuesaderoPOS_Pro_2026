@@ -161,6 +161,7 @@ class ReturnsManager {
 
       // Refrescar vistas
       if (window.salesManager) window.salesManager.renderPartsGrid();
+      if (window.salesManager) window.salesManager.refreshSalesHistory();
       if (window.financesManager) window.financesManager.updateUI();
       if (window.dashboardManager) window.dashboardManager.updateUI();
 

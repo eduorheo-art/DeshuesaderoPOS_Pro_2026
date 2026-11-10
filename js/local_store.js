@@ -3,6 +3,11 @@ class YonkeLocalStore {
   constructor() {
     this.db = null;
     this.ready = false;
+    this.ownerId = null;
+  }
+
+  setOwner(ownerId) {
+    this.ownerId = ownerId || null;
   }
 
   async init() {
@@ -13,9 +18,9 @@ class YonkeLocalStore {
     }
 
     this.db = new Dexie("YonkePOSLocal");
-    this.db.version(1).stores({
-      snapshot: "key",
-      sync_queue: "++qid, created_at, tableName"
+    this.db.version(2).stores({
+      snapshot: "key, owner_id",
+      sync_queue: "++qid, created_at, tableName, owner_id"
     });
 
     await this.db.open();
@@ -24,10 +29,11 @@ class YonkeLocalStore {
   }
 
   async saveSnapshot(yonkeDb) {
-    if (!this.ready) return;
+    if (!this.ready || !this.ownerId) return;
     try {
       await this.db.snapshot.put({
-        key: "full",
+        key: `full:${this.ownerId}`,
+        owner_id: this.ownerId,
         parts: yonkeDb.parts,
         vehicles: yonkeDb.vehicles,
         sales: yonkeDb.sales,
@@ -40,9 +46,9 @@ class YonkeLocalStore {
   }
 
   async loadSnapshot() {
-    if (!this.ready) return null;
+    if (!this.ready || !this.ownerId) return null;
     try {
-      return await this.db.snapshot.get("full");
+      return await this.db.snapshot.get(`full:${this.ownerId}`);
     } catch (err) {
       console.warn("No se pudo leer snapshot IndexedDB:", err);
       return null;
@@ -50,9 +56,10 @@ class YonkeLocalStore {
   }
 
   async enqueue(tableName, op, record) {
-    if (!this.ready || !record) return;
+    if (!this.ready || !this.ownerId || !record) return;
     try {
       await this.db.sync_queue.add({
+        owner_id: this.ownerId,
         tableName,
         op: op || "upsert",
         record,
@@ -64,8 +71,8 @@ class YonkeLocalStore {
   }
 
   async getQueue() {
-    if (!this.ready) return [];
-    return this.db.sync_queue.orderBy("qid").toArray();
+    if (!this.ready || !this.ownerId) return [];
+    return this.db.sync_queue.where("owner_id").equals(this.ownerId).sortBy("qid");
   }
 
   async removeQueueItem(qid) {
@@ -74,8 +81,8 @@ class YonkeLocalStore {
   }
 
   async clearQueue() {
-    if (!this.ready) return;
-    await this.db.sync_queue.clear();
+    if (!this.ready || !this.ownerId) return;
+    await this.db.sync_queue.where("owner_id").equals(this.ownerId).delete();
   }
 }
 

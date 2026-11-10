@@ -7,6 +7,7 @@ class YonkeSyncEngine {
     this.started = false;
     this.applyingRemote = false;
     this.flushTimer = null;
+    this.ownerId = null;
   }
 
   deviceOrigin() {
@@ -19,6 +20,7 @@ class YonkeSyncEngine {
     if (!record || typeof record !== "object") return record;
     record.updated_at = new Date().toISOString();
     record.dispositivo_origen = this.deviceOrigin();
+    if (this.ownerId && this.ownerId !== "offline") record.owner_id = this.ownerId;
     return record;
   }
 
@@ -56,7 +58,9 @@ class YonkeSyncEngine {
     this.started = true;
 
     if (window.yonkeLocalStore) {
-      await window.yonkeLocalStore.init();      
+      await window.yonkeLocalStore.init();
+      this.ownerId = window.yonkeDB?.ownerId || null;
+      window.yonkeLocalStore.setOwner(this.ownerId);
     }
 
     window.addEventListener("online", () => this.flushQueue());
@@ -115,7 +119,28 @@ class YonkeSyncEngine {
 
     const cfg = window.YonkeCloudConfig.get();
     try {
-      this.client = supabase.createClient(cfg.url, cfg.anonKey);
+      this.client = supabase.createClient(cfg.url, cfg.anonKey, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      });
+      const { data, error } = await this.client.auth.getSession();
+      if (error) throw error;
+      const sessionOwnerId = data.session?.user?.id;
+      if (!sessionOwnerId) {
+        this.client = null;
+        this.setStatus("Inicia sesión para sincronizar los datos privados", false);
+        return;
+      }
+      if (this.ownerId && sessionOwnerId !== this.ownerId) {
+        window.location.reload();
+        return;
+      }
+      this.ownerId = sessionOwnerId;
+      if (window.yonkeLocalStore) window.yonkeLocalStore.setOwner(sessionOwnerId);
+      this.client.auth.onAuthStateChange((event, session) => {
+        if (event !== "INITIAL_SESSION" && session?.user?.id !== this.ownerId) {
+          window.location.reload();
+        }
+      });
       await this.pullAndMerge();
       this.subscribeRealtime();
       await this.flushQueue();
@@ -168,9 +193,10 @@ class YonkeSyncEngine {
     this.applyingRemote = true;
     try {
       if (eventType === "DELETE") {
+        if (oldRow?.owner_id !== this.ownerId) return;
         const id = (oldRow && oldRow.id) || (row && row.id);
         window.yonkeDB[kind] = this.collection(kind).filter((item) => item.id !== id);
-      } else if (row && row.id) {
+      } else if (row && row.id && row.owner_id === this.ownerId) {
         const list = this.collection(kind);
         const idx = list.findIndex((item) => item.id === row.id);
         if (idx === -1) {
@@ -193,7 +219,8 @@ class YonkeSyncEngine {
     try {
       for (const kind of kinds) {
         const { data, error } = await this.client.from(this.tableName(kind)).select("*");
-        if (error || !Array.isArray(data)) continue;
+          if (error) throw error;
+          if (!Array.isArray(data)) throw new Error(`Respuesta inválida de Supabase para ${kind}.`);
         const local = this.collection(kind);
         const byId = new Map(local.map((item) => [item.id, item]));
         data.forEach((row) => {
@@ -206,6 +233,7 @@ class YonkeSyncEngine {
 
         const remoteById = new Map(data.map((row) => [row.id, row]));
         const toPush = window.yonkeDB[kind].filter((local) => {
+          if (local.owner_id !== this.ownerId) return false;
           const rem = remoteById.get(local.id);
           if (!rem) return true;
           const tl = Date.parse(local.updated_at || 0) || 0;
@@ -226,6 +254,8 @@ class YonkeSyncEngine {
   async enqueue(kind, record, op) {
     if (this.applyingRemote || !record) return;
     const payload = { ...record };
+    if (!this.ownerId || this.ownerId === "offline") return;
+    payload.owner_id = this.ownerId;
     if (window.yonkeLocalStore) {
       await window.yonkeLocalStore.enqueue(kind, op || "upsert", payload);
     }
@@ -266,6 +296,7 @@ class YonkeSyncEngine {
     this.setStatus("Sincronizando cola con la nube…", "pending");
     try {
       for (const item of queue) {
+        if (item.owner_id !== this.ownerId || item.record?.owner_id !== this.ownerId) continue;
         const table = this.tableName(item.tableName);
         if (!table) {
           await window.yonkeLocalStore.removeQueueItem(item.qid);

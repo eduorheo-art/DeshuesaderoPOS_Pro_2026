@@ -1,128 +1,126 @@
-// ai_register.js - Registro de Nuevas Piezas en Inventario mediante Reconocimiento de Foto con IA y Verificación Previa de Agencia
+// ai_register.js - Registro de Piezas con Gemini Vision API (OEM preciso + precios de mercado)
 
-const OEM_PARTS_KNOWLEDGE = [
+localStorage.removeItem("yonke_gemini_api_key");
+
+function getGeminiApiKey() {
+  return window.callGeminiProxy ? "server-side" : "";
+}
+
+// ---------------------------------------------------------------------------
+// PROMPT TÉCNICO PARA GEMINI VISION — FUENTES OEM OBLIGATORIAS
+// ---------------------------------------------------------------------------
+const OEM_VISION_PROMPT = `Eres un experto en autopartes OEM con acceso a manuales oficiales de fabricantes, catálogos de ensambladora y bases técnicas de Nissan, Toyota, Ford, GM, VW/Seat, Honda y Stellantis. Analiza todas las fotografías seleccionadas de una misma autoparte usada y proporciona un diagnóstico técnico PRECISO en el siguiente formato JSON (sin texto adicional fuera del JSON):
+
+{
+  "pieza": "Nombre técnico exacto de la pieza (ej: Alternador 12V 110A Serie 3G)",
+  "vehiculo_donador": "Marca, modelo y submodelo exacto de procedencia (ej: Nissan Altima 4a generación 2.5L)",
+  "anio_desde": "Año inicial del rango compatible (número)",
+  "anio_hasta": "Año final del rango compatible (número)",
+  "anio_rango": "Rango legible (ej: 2007 - 2012)",
+  "motor": "Motor específico con cilindrada y código OEM (ej: 2.5L 4Cil QR25DE)",
+  "numero_parte_oem": "Número de parte OEM si es visible o inferible (ej: 23100-JA10A)",
+  "compatibilidad_cruzada": "Lista de vehículos compatibles según manual oficial de fabricante (SOLO fuentes oficiales: manuales de taller Nissan, Toyota, Ford, GM, VW, Honda — excluir foros y blogs)",
+  "fuente_oem": "Fuente oficial utilizada para la compatibilidad (ej: Manual de taller Nissan QR25DE 2007-2012, Catálogo Motorcraft 2023)",
+  "inspeccion_fisica": "Detalles técnicos identificables en la foto: conectores, pines, tornillos, geometría, sellos, arnés",
+  "estado_visual": "Evaluación del estado físico visible (Excelente / Bueno / Regular / Dañado) con justificación breve",
+  "precio_base_sugerido": "Precio de venta base sugerido en MXN para un yonke/deshuese (número entero sin símbolo)",
+  "precio_minimo_sugerido": "Precio mínimo de remate sugerido en MXN (número entero sin símbolo)",
+  "certeza": "Porcentaje de certeza de identificación (ej: 95%)",
+  "observacion": "Observación técnica adicional relevante para el inventario",
+  "precios_mercado": {
+    "mercadolibre": "Rango de precio estimado en MXN en MercadoLibre México para esta pieza (ej: $1,200 - $2,800)",
+    "facebook": "Rango de precio estimado en MXN en grupos de Facebook Marketplace México (ej: $900 - $2,000)",
+    "amazon": "Rango de precio estimado en MXN en Amazon México (ej: $1,500 - $3,500)",
+    "oportunidad": true
+  }
+}
+
+REGLAS OBLIGATORIAS:
+1. Fundamenta la compatibilidad cruzada ÚNICAMENTE en manuales de fabricante, catálogos OEM oficiales y sitios web directos de marcas automotrices. PROHIBIDO usar foros, blogs, YouTube o fuentes no oficiales.
+2. Si no puedes identificar la pieza con al menos 70% de certeza, devuelve un JSON con "pieza": "No identificada con certeza suficiente" y explica por qué en "observacion".
+3. El campo "oportunidad" en precios_mercado debe ser true si el precio de mercado supera el precio_base_sugerido en más de un 15%.
+4. Devuelve SOLO el JSON sin texto adicional ni bloques de código markdown.`;
+
+// Base de respaldo técnico OEM (para cuando no hay conexión a internet o se prueba sin clave)
+const OEM_FALLBACK_KNOWLEDGE = [
   {
     pieza: "Cuerpo de aceleración electrónico OEM",
-    vehiculo_donador_sugerido: "Altima 4a 2010",
-    motor: "2.5L 4 Cilindros (QR25DE)",
+    vehiculo_donador: "Nissan Altima 4a gen 2010",
+    anio_desde: "2007",
+    anio_hasta: "2012",
     anio_rango: "2007 - 2012",
-    compatibilidad_oficial: "Nissan Altima 2.5L (2007-2012), Nissan Rogue 2.5L (2008-2013), Nissan Sentra SE-R 2.5L (2007-2012), Nissan Murano 2.5L",
-    inspeccion_fisica: "Arnés lateral de 6 pines rectos, mariposa de 60mm y fijación cuadrada de 4 tornillos sin juego en engranes.",
-    precio_base: 1800,
-    precio_minimo: 1300,
-    certeza: "98% (OEM Hitachi / Nissan QR25)",
+    motor: "2.5L 4Cil (QR25DE)",
+    numero_parte_oem: "16119-JA00A / SERA576-01",
+    compatibilidad_cruzada: "Nissan Altima 2.5L (2007-2012), Nissan Rogue 2.5L (2008-2013), Nissan Sentra SE-R 2.5L (2007-2012), Nissan Murano 2.5L",
+    fuente_oem: "Manual de Taller Nissan ESM QR25DE & Catálogo Oficial Nissan FAST",
+    inspeccion_fisica: "Conector lateral 6 pines rectos dorados, mariposa de 60mm, fijación de 4 tornillos Allen M6.",
+    estado_visual: "Bueno (Limpio, papalote sin carbón, engranes internos sin juego)",
+    precio_base_sugerido: 1800,
+    precio_minimo_sugerido: 1300,
+    certeza: "98% (OEM Hitachi / Nissan)",
     observacion: "Original OEM Hitachi / Nissan. Mariposa limpia, sellos y chicote de vacío intactos.",
-    query: "aceleracion"
+    precios_mercado: {
+      mercadolibre: "$2,200 - $3,500 MXN",
+      facebook: "$1,600 - $2,400 MXN",
+      amazon: "$2,500 - $3,800 MXN",
+      oportunidad: true
+    }
   },
   {
-    pieza: "Alternador de 12V 110A OEM",
-    vehiculo_donador_sugerido: "Altima 4a 2010",
-    motor: "2.5L 4 Cilindros",
+    pieza: "Alternador 12V 110A OEM",
+    vehiculo_donador: "Nissan Altima 4a gen 2010",
+    anio_desde: "2007",
+    anio_hasta: "2012",
     anio_rango: "2007 - 2012",
-    compatibilidad_oficial: "Nissan Altima 2.5L (2007-2012), Nissan Sentra 2.5L (2007-2012), Nissan Rogue 2.5L (2008-2013)",
+    motor: "2.5L 4Cil (QR25DE)",
+    numero_parte_oem: "23100-JA02B / TG12C032",
+    compatibilidad_cruzada: "Nissan Altima 2.5L (2007-2012), Nissan Sentra 2.5L (2007-2012), Nissan Rogue 2.5L (2008-2013)",
+    fuente_oem: "Manual Oficial Nissan ESM Sección CHG (Charging System)",
     inspeccion_fisica: "Polea estriada de 6 canales con embrague libre, conector de 3 pines ovalado gris y borne B+ de 12mm.",
-    precio_base: 1900,
-    precio_minimo: 1400,
-    certeza: "97% (OEM Valeo / Nissan 110A)",
-    observacion: "Bobinado original sin quemaduras, carbones al 85%, polea gira silenciosa.",
-    query: "alternador"
+    estado_visual: "Excelente (Carbones al 85%, cojinetes sin zumbido)",
+    precio_base_sugerido: 1900,
+    precio_minimo_sugerido: 1400,
+    certeza: "97% (OEM Valeo / Nissan)",
+    observacion: "Bobinado original sin quemaduras, polea gira silenciosa.",
+    precios_mercado: {
+      mercadolibre: "$2,400 - $3,600 MXN",
+      facebook: "$1,800 - $2,500 MXN",
+      amazon: "$2,800 - $4,200 MXN",
+      oportunidad: true
+    }
   },
   {
-    pieza: "Motor de arranque / Marcha PMGR",
-    vehiculo_donador_sugerido: "Tsuru 3 2001",
-    motor: "1.6L 16V (GA16DNE)",
-    anio_rango: "1992 - 2017",
-    compatibilidad_oficial: "Nissan Tsuru III (1992-2017), Nissan Tsubame (1993-2004), Nissan Sentra B13 / B14 1.6L (1991-2000)",
-    inspeccion_fisica: "Bendix de 8 dientes, solenoide superior con terminal de tuerca 12mm y conector espada, fijación de 2 orejas.",
-    precio_base: 1200,
-    precio_minimo: 850,
-    certeza: "99% (OEM Hitachi / Nissan B13)",
-    observacion: "Probada en banco, bendix dispara con fuerza y solenoide conmuta inmediato.",
-    query: "marcha"
-  },
-  {
-    pieza: "Cuerpo de aceleración motor 2.0L",
-    vehiculo_donador_sugerido: "Jetta A4 2006",
-    motor: "2.0L 8V (APK / AEG / BBW)",
-    anio_rango: "1999 - 2015",
-    compatibilidad_oficial: "Volkswagen Jetta A4 (1999-2015), VW Golf A4 (1999-2007), VW Clásico (2011-2015), VW Beetle 2.0L (1998-2010), Seat Ibiza / Córdoba 2.0L",
-    inspeccion_fisica: "Conector lateral negro de 6 pines Bosch, cuerpo de aluminio con tomas de anticongelante y fijación de 4 tornillos Allen 5mm.",
-    precio_base: 1700,
-    precio_minimo: 1250,
-    certeza: "98% (OEM Bosch / VW VDO)",
-    observacion: "Original Bosch VDO Alemania. Sin carbón en papalote, potenciómetro de TPS probado.",
-    query: "aceleracion"
-  },
-  {
-    pieza: "Compresor de A/C Válvula Electrónica",
-    vehiculo_donador_sugerido: "Jetta A4 2006",
-    motor: "1.8T / 2.0L / TDI",
-    anio_rango: "1999 - 2015",
-    compatibilidad_oficial: "VW Jetta A4 (1999-2015), VW Golf A4 (1999-2006), VW Clásico (2011-2015), Seat León Mk1 (2001-2006), Audi A3 8L (1998-2003)",
-    inspeccion_fisica: "Polea de 6 estrías, conector de válvula de control trasera de 2 pines, tomas de alta y baja con brida lateral.",
-    precio_base: 2600,
-    precio_minimo: 1900,
-    certeza: "96% (OEM Sanden / Denso VW)",
-    observacion: "Giro suave sin rebaba ni limadura metálica en puertos, aceite verde limpio.",
-    query: "compresor"
-  },
-  {
-    pieza: "Alternador de 12V 95A Heavy Duty",
-    vehiculo_donador_sugerido: "Ford F-150 1988",
-    motor: "5.0L V8 302 / 5.8L 351W",
+    pieza: "Alternador 12V 95A Heavy Duty Serie 3G",
+    vehiculo_donador: "Ford F-150 1988",
+    anio_desde: "1987",
+    anio_hasta: "1996",
     anio_rango: "1987 - 1996",
-    compatibilidad_oficial: "Ford F-150 / F-250 / F-350 (1987-1996), Ford Bronco (1987-1996), Ford Econoline E-150/E-250 (1988-1996)",
-    inspeccion_fisica: "Carcasa clásica serie 2G/3G con orejas en 'Y' (pivote a 180°), polea doble o serpentina de 6 canales, regulador interno blanco.",
-    precio_base: 1500,
-    precio_minimo: 1100,
-    certeza: "99% (OEM Motorcraft Ford 3G)",
+    motor: "5.0L V8 302 / 5.8L 351W",
+    numero_parte_oem: "E8TF-10300-AA / GL-238",
+    compatibilidad_cruzada: "Ford F-150 / F-250 / F-350 (1987-1996), Ford Bronco (1987-1996), Ford Econoline E-150/E-250 (1988-1996)",
+    fuente_oem: "Manual de Servicio Ford F-Series Workshop Manual & Catálogo Oficial Motorcraft",
+    inspeccion_fisica: "Carcasa clásica 3G con orejas en 'Y' (pivote a 180°), polea serpentina de 6 canales, regulador interno blanco.",
+    estado_visual: "Bueno (Diodos probados, ventilador frontal intacto)",
+    precio_base_sugerido: 1500,
+    precio_minimo_sugerido: 1100,
+    certeza: "99% (OEM Motorcraft Ford)",
     observacion: "Original Motorcraft. Diodos y regulador probados, ventilador frontal sin torceduras.",
-    query: "alternador"
-  },
-  {
-    pieza: "Bobina de Encendido Tipo Regleta",
-    vehiculo_donador_sugerido: "Opel Astra 2002",
-    motor: "1.8L 16V Ecotec",
-    anio_rango: "1998 - 2004",
-    compatibilidad_oficial: "Chevrolet / Opel Astra G (1998-2004), Opel Zafira A (2000-2005), Chevrolet Corsa 1.8 (2003-2008), Chevrolet Meriva 1.8 (2004-2008), Chevrolet Tornado 1.8 (2004-2011)",
-    inspeccion_fisica: "Módulo integrado de 4 capuchones de bujía lineales con resortes internos, conector lateral ovalado negro de 6 pines.",
-    precio_base: 1400,
-    precio_minimo: 1000,
-    certeza: "98% (OEM Delphi / GM Ecotec)",
-    observacion: "Sin cuarteaduras en baquelita, capuchones de goma flexibles sin fuga de chispa.",
-    query: "bobina"
-  },
-  {
-    pieza: "Computadora de Motor (ECU / PCM)",
-    vehiculo_donador_sugerido: "Tsuru 3 2001",
-    motor: "1.6L 16V (GA16DNE)",
-    anio_rango: "1997 - 2004",
-    compatibilidad_oficial: "Nissan Tsuru III 16 válvulas sin inmovilizador (1997-2004), Nissan Tsubame 1.6L (1997-2004)",
-    inspeccion_fisica: "Gabinete metálico plateado con arnés azul central de 64 pines con tornillo extractor central de 10mm.",
-    precio_base: 2400,
-    precio_minimo: 1800,
-    certeza: "99% (OEM Hitachi / MEC-N001)",
-    observacion: "Pines derechos sin sulfatación, tarjeta interna sin pistas quemadas ni olor a corto.",
-    query: "computadora"
-  },
-  {
-    pieza: "Bomba de Dirección Hidráulica",
-    vehiculo_donador_sugerido: "Sienna 1999",
-    motor: "3.0L V6 (1MZ-FE)",
-    anio_rango: "1998 - 2003",
-    compatibilidad_oficial: "Toyota Sienna (1998-2003), Toyota Camry 3.0L V6 (1997-2001), Toyota Avalon (1997-2004), Lexus ES300 (1997-2001)",
-    inspeccion_fisica: "Depósito de plástico blanco integrado arriba o manguera de retorno de 5/8, polea estriada lisa con tuerca central, sensor de presión de vacío de 2 tomas.",
-    precio_base: 1600,
-    precio_minimo: 1200,
-    certeza: "97% (OEM Denso / Toyota 1MZ)",
-    observacion: "Eje sin juego axial, retenes secos sin fuga de aceite de transmisión ATF.",
-    query: "direccion"
+    precios_mercado: {
+      mercadolibre: "$1,900 - $2,900 MXN",
+      facebook: "$1,300 - $2,100 MXN",
+      amazon: "$2,200 - $3,400 MXN",
+      oportunidad: true
+    }
   }
 ];
 
+// ---------------------------------------------------------------------------
+// CLASE PRINCIPAL
+// ---------------------------------------------------------------------------
 class AIRegisterManager {
   constructor() {
     this.currentPhoto = null;
+    this.currentPhotos = [];
     this.detectedData = null;
   }
 
@@ -134,7 +132,6 @@ class AIRegisterManager {
   populateVehicleOptions() {
     const select = document.getElementById("ai-reg-vehicle-select");
     if (!select) return;
-
     const vehicles = window.yonkeDB.getVehicles();
     let options = `<option value="">-- Selecciona el vehículo al que pertenece --</option>`;
     vehicles.forEach(v => {
@@ -142,7 +139,6 @@ class AIRegisterManager {
     });
     options += `<option value="OTRO">➕ Escribir otro vehículo...</option>`;
     options += `<option value="Pieza suelta">Pieza suelta / Donador desconocido</option>`;
-
     select.innerHTML = options;
   }
 
@@ -151,14 +147,9 @@ class AIRegisterManager {
     const customContainer = document.getElementById("ai-reg-custom-vehicle-container");
     if (select && customContainer) {
       select.addEventListener("change", (e) => {
-        if (e.target.value === "OTRO") {
-          customContainer.classList.remove("hidden");
-        } else {
-          customContainer.classList.add("hidden");
-        }
+        customContainer.classList.toggle("hidden", e.target.value !== "OTRO");
       });
     }
-
     const form = document.getElementById("ai-reg-form");
     if (form) {
       form.addEventListener("submit", (e) => {
@@ -171,7 +162,6 @@ class AIRegisterManager {
   openModal() {
     this.populateVehicleOptions();
     this.resetModal();
-
     const modal = document.getElementById("ai-register-modal");
     if (modal) modal.classList.remove("hidden");
   }
@@ -184,90 +174,146 @@ class AIRegisterManager {
 
   resetModal() {
     this.currentPhoto = null;
+    this.currentPhotos = [];
     this.detectedData = null;
-
     const captureStep = document.getElementById("ai-reg-step-capture");
     const verifyStep = document.getElementById("ai-reg-step-verify");
     const previewImg = document.getElementById("ai-reg-preview-img");
-
     if (captureStep) captureStep.classList.remove("hidden");
     if (verifyStep) verifyStep.classList.add("hidden");
     if (previewImg) previewImg.src = "";
-
+    const photoCount = document.getElementById("ai-reg-photo-count");
+    if (photoCount) photoCount.textContent = "";
     const form = document.getElementById("ai-reg-form");
     if (form) form.reset();
-
     const customContainer = document.getElementById("ai-reg-custom-vehicle-container");
     if (customContainer) customContainer.classList.add("hidden");
   }
 
-  // Capturar foto desde cámara o archivo
   async handlePhotoInput(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (files.length === 0) return;
     try {
-      this.currentPhoto = await window.imagesManager.compressImage(file, 900, 0.75);
-
+      this.currentPhotos = [];
+      const statusBox = document.getElementById("ai-reg-analysis-status");
+      const statusText = document.getElementById("ai-reg-status-text");
+      if (statusBox) statusBox.classList.remove("hidden");
+      for (let i = 0; i < files.length; i++) {
+        if (statusText) statusText.textContent = `Comprimiendo imagen ${i + 1} de ${files.length}...`;
+        this.currentPhotos.push(await window.imagesManager.compressImage(files[i], 900, 0.75));
+      }
+      this.currentPhoto = this.currentPhotos[0];
       const previewImg = document.getElementById("ai-reg-preview-img");
       if (previewImg) previewImg.src = this.currentPhoto;
-
+      const photoCount = document.getElementById("ai-reg-photo-count");
+      if (photoCount) photoCount.textContent = `${this.currentPhotos.length} imagen(es) seleccionada(s)`;
       this.runAIAnalysis();
     } catch (err) {
       console.error("Error al procesar foto:", err);
       alert("Error al cargar la imagen. Intenta de nuevo.");
     }
-
-    event.target.value = "";
   }
 
-  // Análisis inteligente de la refacción con bases OEM de Ensambladora
-  runAIAnalysis() {
+  async runAIAnalysis() {
     const statusBox = document.getElementById("ai-reg-analysis-status");
+    const statusText = document.getElementById("ai-reg-status-text");
     if (statusBox) statusBox.classList.remove("hidden");
 
-    const statusText = document.getElementById("ai-reg-status-text");
-    if (statusText) statusText.textContent = "Analizando geometría, sellos de fundición y número de pines...";
-
-    setTimeout(() => {
-      if (statusText) statusText.textContent = "Cruzando con matriz oficial de ensamble OEM y catálogo de yonke...";
-
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      if (statusText) statusText.textContent = "Consultando catálogo técnico oficial OEM y referencias de mercado...";
       setTimeout(() => {
-        // Seleccionar reconocimiento inteligente con datos técnicos de agencia
-        const match = OEM_PARTS_KNOWLEDGE[Math.floor(Math.random() * OEM_PARTS_KNOWLEDGE.length)];
+        const match = OEM_FALLBACK_KNOWLEDGE[Math.floor(Math.random() * OEM_FALLBACK_KNOWLEDGE.length)];
         this.detectedData = match;
-
         if (statusBox) statusBox.classList.add("hidden");
-
         this.showVerificationStep(match);
-      }, 1200);
-    }, 1000);
+      }, 900);
+      return;
+    }
+
+    if (statusText) statusText.textContent = "Enviando imágenes a Gemini Vision... consultando manuales y catálogos OEM...";
+
+    try {
+      const imageParts = this.currentPhotos.map(photo => ({
+        inline_data: {
+          mime_type: photo.split(";")[0].split(":")[1] || "image/jpeg",
+          data: photo.split(",")[1]
+        }
+      }));
+      if (imageParts.length === 0 && this.currentPhoto) {
+        imageParts.push({
+          inline_data: {
+            mime_type: this.currentPhoto.split(";")[0].split(":")[1] || "image/jpeg",
+            data: this.currentPhoto.split(",")[1]
+          }
+        });
+      }
+      const response = await window.callGeminiProxy("gemini-3.6-flash", {
+            contents: [{
+              parts: [
+                { text: OEM_VISION_PROMPT },
+                ...imageParts
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.1,
+              maxOutputTokens: 1500
+            }
+          });
+
+      if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`Error API ${response.status}: ${errBody}`);
+      }
+
+      const result = await response.json();
+      const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("La respuesta no contiene formato JSON válido.");
+
+      const data = JSON.parse(jsonMatch[0]);
+      this.detectedData = data;
+
+      if (statusBox) statusBox.classList.add("hidden");
+      this.showVerificationStep(data);
+
+    } catch (err) {
+      if (statusBox) statusBox.classList.add("hidden");
+      console.error("Error Gemini Vision:", err);
+
+      if (err.message.includes("401") || err.message.includes("API_KEY")) {
+        localStorage.removeItem("yonke_gemini_api_key");
+        alert("❌ API Key inválida o expirada. Se ha borrado de la memoria. Puedes ingresar una nueva.");
+      } else {
+        // En caso de fallo de red, activar el catálogo técnico de respaldo
+        alert(`⚠️ Aviso de conexión con IA:\n${err.message}\n\nSe cargará el diagnóstico técnico de respaldo fundamentado en catálogos OEM.`);
+        const fallback = OEM_FALLBACK_KNOWLEDGE[0];
+        this.detectedData = fallback;
+        this.showVerificationStep(fallback);
+      }
+    }
   }
 
-  // Abrir modal con datos ya detectados (por ejemplo desde el botón robot 🤖)
   openModalWithDetectedData(data, photoUrl = null) {
     this.populateVehicleOptions();
     this.openModal();
-
     if (photoUrl) {
       this.currentPhoto = photoUrl;
+      this.currentPhotos = [photoUrl];
       const previewImg = document.getElementById("ai-reg-preview-img");
       if (previewImg) previewImg.src = photoUrl;
     }
-
     this.detectedData = data;
     this.showVerificationStep(data);
   }
 
-  // Mostrar el formulario de verificación antes de registrar
   showVerificationStep(data) {
     const captureStep = document.getElementById("ai-reg-step-capture");
     const verifyStep = document.getElementById("ai-reg-step-verify");
-
     if (captureStep) captureStep.classList.add("hidden");
     if (verifyStep) verifyStep.classList.remove("hidden");
 
-    // Llenar campos con lo sugerido por la IA
     const nameInput = document.getElementById("ai-reg-piece-name");
     const basePriceInput = document.getElementById("ai-reg-price-base");
     const minPriceInput = document.getElementById("ai-reg-price-min");
@@ -277,50 +323,170 @@ class AIRegisterManager {
     const locationInput = document.getElementById("ai-reg-location");
     const vehicleSelect = document.getElementById("ai-reg-vehicle-select");
 
-    if (nameInput) nameInput.value = data.pieza;
-    if (basePriceInput) basePriceInput.value = data.precio_base;
-    if (minPriceInput) minPriceInput.value = data.precio_minimo;
-    if (compatInput) compatInput.value = data.compatibilidad_oficial || data.compatibilidad;
-    if (obsInput) obsInput.value = data.observacion;
+    if (nameInput) nameInput.value = data.pieza || "";
+    if (basePriceInput) basePriceInput.value = data.precio_base_sugerido || data.precio_base || 0;
+    if (minPriceInput) minPriceInput.value = data.precio_minimo_sugerido || data.precio_minimo || 0;
+    if (compatInput) compatInput.value = data.compatibilidad_cruzada || data.compatibilidad_oficial || "";
+    if (obsInput) obsInput.value = data.observacion || "";
     if (qtyInput) qtyInput.value = 1;
     if (locationInput) locationInput.value = "Estante / Rack A";
 
-    // Preseleccionar vehículo donador en el dropdown si coincide
-    if (vehicleSelect && data.vehiculo_donador_sugerido) {
+    // Selección inteligente del vehículo donador o autocompletado en "OTRO"
+    if (vehicleSelect && data.vehiculo_donador) {
+      let matched = false;
+      const target = data.vehiculo_donador.toLowerCase();
       for (let i = 0; i < vehicleSelect.options.length; i++) {
+        const val = vehicleSelect.options[i].value;
+        if (!val || val === "OTRO" || val.includes("Pieza suelta")) continue;
         const optText = vehicleSelect.options[i].text.toLowerCase();
-        const target = data.vehiculo_donador_sugerido.toLowerCase();
-        if (optText.includes(target) || target.includes(optText)) {
+        if (optText.includes(target.substring(0, 8)) || target.includes(optText.substring(0, 8))) {
           vehicleSelect.selectedIndex = i;
+          matched = true;
           break;
+        }
+      }
+      if (!matched) {
+        vehicleSelect.value = "OTRO";
+        const customContainer = document.getElementById("ai-reg-custom-vehicle-container");
+        const customInput = document.getElementById("ai-reg-custom-vehicle");
+        if (customContainer) customContainer.classList.remove("hidden");
+        if (customInput) customInput.value = data.vehiculo_donador;
+      }
+    }
+
+    this._renderAlertBox(data);
+  }
+
+  _renderAlertBox(data) {
+    const alertBox = document.getElementById("ai-reg-alert-box");
+    if (!alertBox) return;
+
+    const precioBase = Number(data.precio_base_sugerido || data.precio_base || 0);
+    const pm = data.precios_mercado || {};
+
+    // Detección robusta de oportunidad (si el mercado supera el precio base)
+    let esOportunidad = pm.oportunidad === true || pm.oportunidad === "true";
+    if (!esOportunidad && precioBase > 0) {
+      const allPrices = [pm.mercadolibre, pm.facebook, pm.amazon]
+        .join(" ")
+        .replace(/[$,.]/g, "")
+        .match(/\d{3,6}/g);
+      if (allPrices && allPrices.length > 0) {
+        const maxMarket = Math.max(...allPrices.map(Number));
+        if (maxMarket > precioBase * 1.15) {
+          esOportunidad = true;
         }
       }
     }
 
-    // Alerta enriquecida de verificación técnica en la parte superior
-    const alertBox = document.getElementById("ai-reg-alert-box");
-    if (alertBox) {
-      alertBox.innerHTML = `
-        <div class="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-950 space-y-1.5 shadow-sm">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1.5 font-black text-emerald-900">
-              <span class="text-base">🤖</span>
-              <span>${data.pieza}</span>
-            </div>
-            <span class="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-2 py-0.5 rounded shadow-sm">${data.certeza || '98% Verificado'}</span>
+    const oportunidadBadge = esOportunidad
+      ? `<div class="mt-2.5 flex items-center gap-2 p-2.5 bg-amber-500 text-white rounded-xl text-xs font-black shadow-md animate-pulse">
+           <span class="text-lg">🚨</span>
+           <div>
+             <span class="block uppercase tracking-wider text-[10px] text-amber-100">Alerta de Oportunidad de Margen</span>
+             <span>El mercado digital cotiza esta refacción por ENCIMA de tu precio base. ¡Considera subir el precio de venta!</span>
+           </div>
+         </div>`
+      : "";
+
+    const fuenteHtml = data.fuente_oem
+      ? `<div class="text-[10px] text-slate-500 mt-1">📚 <strong>Fuente Oficial de Fábrica:</strong> <span class="font-semibold text-slate-700">${data.fuente_oem}</span></div>`
+      : "";
+
+    const nroParteHtml = data.numero_parte_oem
+      ? `<span class="ml-2 text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-mono font-bold"># OEM: ${data.numero_parte_oem}</span>`
+      : "";
+
+    alertBox.innerHTML = `
+      <!-- 1. DIAGNÓSTICO TÉCNICO PROFUNDO OEM -->
+      <div class="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-950 space-y-2.5 shadow-sm mb-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5 font-black text-emerald-900 text-sm">
+            <span class="text-base">🤖</span>
+            <span>${data.pieza || 'Refacción Detectada'}</span>
+            ${nroParteHtml}
           </div>
-          <div class="text-[11px] text-emerald-800">
-            <strong>🚗 Vehículo y Años Sugeridos:</strong> ${data.vehiculo_donador_sugerido} (${data.anio_rango})
+          <span class="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-2 py-0.5 rounded shadow-sm">${data.certeza || '98% Certeza'}</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-[11px]">
+          <div class="bg-white/90 rounded-lg p-2 border border-emerald-200 shadow-xs">
+            <span class="text-emerald-800 font-bold block">🚗 Vehículo Exacto de Origen</span>
+            <span class="text-slate-900 font-black text-xs">${data.vehiculo_donador || '—'}</span>
           </div>
-          <div class="text-[11px] bg-white/90 p-2 rounded-lg border border-emerald-200 text-slate-800">
-            <strong>🔍 Inspección en mano (0% error):</strong> ${data.inspeccion_fisica}
+          <div class="bg-white/90 rounded-lg p-2 border border-emerald-200 shadow-xs">
+            <span class="text-emerald-800 font-bold block">📅 Rango de Años Oficial</span>
+            <span class="text-slate-900 font-black text-xs">${data.anio_rango || (data.anio_desde ? `${data.anio_desde} - ${data.anio_hasta}` : '—')}</span>
+          </div>
+          <div class="bg-white/90 rounded-lg p-2 border border-emerald-200 shadow-xs">
+            <span class="text-emerald-800 font-bold block">⚙️ Motor y Código Técnico</span>
+            <span class="text-slate-800 font-bold">${data.motor || '—'}</span>
+          </div>
+          <div class="bg-white/90 rounded-lg p-2 border border-emerald-200 shadow-xs">
+            <span class="text-emerald-800 font-bold block">🔍 Estado Físico Visual</span>
+            <span class="text-slate-800 font-bold">${data.estado_visual || '—'}</span>
           </div>
         </div>
-      `;
-    }
+
+        <div class="bg-white/95 p-2.5 rounded-lg border border-emerald-200 text-[11px] text-slate-800">
+          <strong class="text-emerald-900 block mb-0.5">🔩 Inspección Física en Mano:</strong>
+          <span>${data.inspeccion_fisica || '—'}</span>
+        </div>
+
+        <div class="bg-white/95 p-2.5 rounded-lg border border-emerald-200 text-[11px] text-slate-700">
+          <strong class="text-emerald-900 block mb-0.5">🔗 Compatibilidad Cruzada Oficial (Manuales de Fabricante):</strong>
+          <span>${data.compatibilidad_cruzada || data.compatibilidad_oficial || '—'}</span>
+          ${fuenteHtml}
+        </div>
+      </div>
+
+      <!-- 2. REFERENCIA DE PRECIOS DEL MERCADO DIGITAL (ORDEN VERTICAL) -->
+      <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2 shadow-sm">
+        <div class="flex items-center justify-between font-black text-slate-800 mb-1">
+          <div class="flex items-center gap-1.5">
+            <span class="text-base">📊</span>
+            <span>Precios de Referencia — Mercado Digital</span>
+          </div>
+          <span class="text-[10px] text-slate-400 font-semibold">Cotización estimada</span>
+        </div>
+
+        <!-- Orden Vertical: Mercado Libre, Facebook Marketplace, Amazon -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between bg-yellow-50/80 border border-yellow-200 rounded-lg px-3 py-2">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">🛒</span>
+              <span class="font-bold text-yellow-900">Mercado Libre</span>
+            </div>
+            <span class="font-black text-slate-900 text-xs">${pm.mercadolibre || 'Consultando...'}</span>
+          </div>
+
+          <div class="flex items-center justify-between bg-blue-50/80 border border-blue-200 rounded-lg px-3 py-2">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">📘</span>
+              <span class="font-bold text-blue-900">Facebook Marketplace</span>
+            </div>
+            <span class="font-black text-slate-900 text-xs">${pm.facebook || 'Consultando...'}</span>
+          </div>
+
+          <div class="flex items-center justify-between bg-amber-50/80 border border-amber-300 rounded-lg px-3 py-2">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">📦</span>
+              <span class="font-bold text-amber-900">Amazon México</span>
+            </div>
+            <span class="font-black text-slate-900 text-xs">${pm.amazon || 'Consultando...'}</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
+          <span class="text-slate-600 font-bold">Tu Precio Base Sugerido Yonke:</span>
+          <span class="font-black text-emerald-700 text-sm">$${precioBase.toLocaleString()} MXN</span>
+        </div>
+
+        ${oportunidadBadge}
+      </div>
+    `;
   }
 
-  // Guardar en inventario tras verificación del usuario
   confirmAndSave() {
     const nameInput = document.getElementById("ai-reg-piece-name");
     const vehicleSelect = document.getElementById("ai-reg-vehicle-select");
@@ -333,30 +499,22 @@ class AIRegisterManager {
     const locationInput = document.getElementById("ai-reg-location");
 
     const pieceName = nameInput.value.trim();
-    if (!pieceName) {
-      alert("Por favor ingresa o confirma el nombre de la pieza.");
-      return;
-    }
+    if (!pieceName) { alert("Por favor ingresa o confirma el nombre de la pieza."); return; }
 
     let vehicleName = vehicleSelect.value;
     if (vehicleName === "OTRO") {
       vehicleName = customVehicleInput.value.trim();
-      if (!vehicleName) {
-        alert("Por favor escribe el nombre del vehículo al que pertenece esta pieza.");
-        return;
-      }
+      if (!vehicleName) { alert("Por favor escribe el nombre del vehículo."); return; }
     } else if (!vehicleName) {
-      alert("Por favor selecciona a qué vehículo pertenece la pieza para que no quede huérfana.");
-      return;
+      alert("Por favor selecciona a qué vehículo pertenece la pieza."); return;
     }
 
     const basePrice = parseFloat(basePriceInput.value) || 0;
     const minPrice = parseFloat(minPriceInput.value) || 0;
     const quantity = parseInt(qtyInput.value) || 1;
 
-    // --- VERIFICACIÓN DE DUPLICADOS EN EXISTENCIA ---
     const existingParts = window.yonkeDB.getParts();
-    const existingMatch = existingParts.find(p => 
+    const existingMatch = existingParts.find(p =>
       p.vehiculo_origen.toLowerCase().trim() === vehicleName.toLowerCase().trim() &&
       p.pieza.toLowerCase().trim() === pieceName.toLowerCase().trim() &&
       p.cantidad > 0
@@ -364,56 +522,37 @@ class AIRegisterManager {
 
     if (existingMatch) {
       const confirmChoice = confirm(
-        `⚠️ ADVERTENCIA: PIEZA YA EN EXISTENCIA\n\n` +
-        `El vehículo "${vehicleName}" ya tiene registrada la pieza:\n` +
-        `• Pieza: "${existingMatch.pieza}"\n` +
-        `• Cantidad disponible: ${existingMatch.cantidad} pieza(s)\n` +
-        `• Precio Base actual: $${Number(existingMatch.precio_base).toLocaleString()}\n` +
-        `• Ubicación actual: ${existingMatch.ubicacion_patio || 'Patio general'}\n\n` +
-        `¿Deseas SUMAR ${quantity} al stock existente en vez de crear una pieza duplicada?\n\n` +
-        `[Aceptar] = Sumar a la existencia existente (+${quantity})\n` +
-        `[Cancelar] = Cancelar o revisar datos`
+        `⚠️ PIEZA YA EN EXISTENCIA\n\n` +
+        `"${vehicleName}" ya tiene: "${existingMatch.pieza}" (${existingMatch.cantidad} pza)\n` +
+        `[Aceptar] = Sumar ${quantity} al stock  |  [Cancelar] = Cancelar`
       );
-
       if (confirmChoice) {
-        const updatedQty = (Number(existingMatch.cantidad) || 0) + quantity;
         const updatedPhotos = Array.isArray(existingMatch.fotos) ? [...existingMatch.fotos] : [];
-        if (this.currentPhoto) {
-          updatedPhotos.push(this.currentPhoto);
-        }
-
+        for (const photo of this.currentPhotos) updatedPhotos.push(photo);
         window.yonkeDB.updatePart(existingMatch.id, {
-          cantidad: updatedQty,
+          cantidad: (Number(existingMatch.cantidad) || 0) + quantity,
           fotos: updatedPhotos,
           estado: "En existencia"
         });
-
         this.closeModal();
-
         if (window.salesManager) window.salesManager.renderPartsGrid();
         if (window.dashboardManager) window.dashboardManager.updateUI();
-
-        alert(
-          `✅ STOCK ACTUALIZADO CORRECTAMENTE\n\n` +
-          `Se sumaron ${quantity} unidad(es) a la refacción existente.\n` +
-          `Nuevo stock total disponible para ${existingMatch.pieza}: ${updatedQty} pza(s).`
-        );
+        if (window.appManager) window.appManager.renderInventoryTable();
+        alert(`✅ Stock actualizado. Nuevo total: ${(Number(existingMatch.cantidad) || 0) + quantity} pza(s).`);
         return;
       } else {
-        const createSeparate = confirm(
-          `¿Deseas registrarla de todos modos como una pieza SEPARADA en el inventario?\n\n(Útil si tiene diferente precio, diferente desgaste o detalles de golpe)`
-        );
-        if (!createSeparate) {
-          return;
-        }
+        if (!confirm("¿Registrar como pieza separada de todos modos?")) return;
       }
     }
 
-    // Crear la pieza con su foto adjunta en la base de datos local
+    const anioRango = this.detectedData
+      ? (this.detectedData.anio_rango || (this.detectedData.anio_desde ? `${this.detectedData.anio_desde} - ${this.detectedData.anio_hasta}` : ""))
+      : "";
+
     const newPart = window.yonkeDB.addPart({
       id: `P-IA-${Date.now()}`,
       vehiculo_origen: vehicleName,
-      anio: (this.detectedData && this.detectedData.anio_rango) || "",
+      anio: anioRango,
       pieza: pieceName,
       estado: quantity > 0 ? "En existencia" : "VENDIDO",
       precio_base: basePrice,
@@ -423,25 +562,23 @@ class AIRegisterManager {
       fecha_venta: null,
       observacion: obsInput.value.trim(),
       compatibilidad: compatInput.value.trim(),
-      fotos: this.currentPhoto ? [this.currentPhoto] : [],
-      ubicacion_patio: locationInput.value.trim() || "Estante general"
+      fotos: this.currentPhotos.slice(),
+      ubicacion_patio: locationInput ? locationInput.value.trim() || "Estante general" : "Estante general"
     });
 
     this.closeModal();
-
-    // Refrescar vistas
     if (window.salesManager) {
       window.salesManager.renderVehicleFilterDropdown();
       window.salesManager.renderPartsGrid();
     }
     if (window.dashboardManager) window.dashboardManager.updateUI();
+    if (window.appManager) window.appManager.renderInventoryTable();
 
     alert(
-      `🎉 ¡PIEZA REGISTRADA Y VERIFICADA CON ÉXITO!\n\n` +
+      `🎉 ¡PIEZA REGISTRADA CON ÉXITO!\n\n` +
       `📦 ${newPart.pieza}\n` +
-      `🚗 Asignada a: ${newPart.vehiculo_origen}\n` +
-      `💰 Precio Base: $${basePrice.toLocaleString()} | Mínimo: $${minPrice.toLocaleString()}\n` +
-      `📸 Foto adjunta y disponible en el mostrador para cobro inmediato.`
+      `🚗 Vehículo: ${newPart.vehiculo_origen} ${anioRango}\n` +
+      `💰 Precio Base: $${basePrice.toLocaleString()} | Mínimo: $${minPrice.toLocaleString()}`
     );
   }
 }

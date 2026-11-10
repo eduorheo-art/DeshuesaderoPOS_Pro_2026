@@ -24,6 +24,13 @@ class ImagesManager {
         this.handleAIScanUpload(e);
       });
     }
+
+    const aiGalleryInput = document.getElementById("ai-lens-gallery-input");
+    if (aiGalleryInput) {
+      aiGalleryInput.addEventListener("change", (e) => {
+        this.handleAIScanUpload(e);
+      });
+    }
   }
 
   openCameraModal(partId) {
@@ -115,12 +122,17 @@ class ImagesManager {
   // Comprimir imagen usando Canvas HTML5 para que no pese nada y no agote almacenamiento local
   compressImage(file, maxWidth = 800, quality = 0.75) {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target.result;
-        img.onload = () => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+      const cleanup = () => {
+        img.onload = null;
+        img.onerror = null;
+        URL.revokeObjectURL(objectUrl);
+        img.removeAttribute("src");
+      };
+
+      img.onload = () => {
+        try {
           let width = img.width;
           let height = img.height;
 
@@ -134,15 +146,24 @@ class ImagesManager {
           canvas.height = height;
 
           const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("No se pudo preparar el lienzo para comprimir la imagen.");
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Convertir a JPEG comprimido
           const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
+          canvas.width = 0;
+          canvas.height = 0;
+          cleanup();
           resolve(compressedDataUrl);
-        };
-        img.onerror = reject;
+        } catch (error) {
+          cleanup();
+          reject(error);
+        }
       };
-      reader.onerror = reject;
+      img.onerror = () => {
+        cleanup();
+        reject(new Error("No se pudo leer el archivo de imagen."));
+      };
+      img.src = objectUrl;
     });
   }
 
@@ -199,16 +220,23 @@ class ImagesManager {
     if (fileInput) fileInput.click();
   }
 
+  triggerAIScanFromGallery() {
+    const fileInput = document.getElementById("ai-lens-gallery-input");
+    if (fileInput) fileInput.click();
+  }
+
   async handleAIScanUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    const fileCount = files.length;
+    event.target.value = "";
 
     // Mostrar modal de escaneo con IA
     const modal = document.getElementById("ai-scan-modal");
     if (modal) modal.classList.remove("hidden");
 
     const statusEl = document.getElementById("ai-scan-status");
-    if (statusEl) statusEl.textContent = "Analizando geometría de la pieza y marcas visibles con IA...";
+    if (statusEl) statusEl.textContent = `Analizando ${fileCount} imagen(es) y marcas visibles con IA...`;
 
     // Simular procesamiento visual inteligente (o llamada a API con internet)
     setTimeout(() => {
@@ -244,7 +272,6 @@ class ImagesManager {
         }
       }, 1200);
 
-      event.target.value = "";
     }, 1800);
   }
 
