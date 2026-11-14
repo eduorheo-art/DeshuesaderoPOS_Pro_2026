@@ -3,10 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.sheetjs.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https://lkivtjzcemvinymxrrvv.supabase.co wss://lkivtjzcemvinymxrrvv.supabase.co https://commons.wikimedia.org https://cdn.jsdelivr.net https://en.wikipedia.org https://generativelanguage.googleapis.com; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.sheetjs.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https://lkivtjzcemvinymxrrvv.supabase.co wss://lkivtjzcemvinymxrrvv.supabase.co https://commons.wikimedia.org https://cdn.jsdelivr.net https://en.wikipedia.org https://generativelanguage.googleapis.com; form-action 'self'; upgrade-insecure-requests">
   <title>YonkePOS Pro - Sistema TPV y Deshuesadero de Autopartes</title>
-  <!-- Tailwind CSS -->
-  <script src="./yonke_pos/vendor/tailwindcss.browser.v3.4.17.js" integrity="sha384-igm5BeiBt36UU4gqwWS7imYmelpTsZlQ45FZf+XBn9MuJbn4nQr7yx1yFydocC/K"></script>
+  <!-- Tailwind CSS Local + Fallbacks Robustos para Local/GitHub Pages -->
+  <script src="vendor/tailwindcss.browser.v3.4.17.js"></script>
+  <script>
+    if (!window.tailwind) {
+      document.write('<script src="./yonke_pos/vendor/tailwindcss.browser.v3.4.17.js"><\/script>');
+    }
+  </script>
+  <script>
+    if (!window.tailwind) {
+      document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
+    }
+  </script>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
@@ -15,6 +25,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0B0E14">
   <style>
+    /* Asegurar que elementos ocultos nunca se desborden si el script de estilos tarda en evaluar */
+    .hidden {
+      display: none !important;
+    }
     /* Estilos personalizados para asegurar máxima responsividad táctil */
     body {
       touch-action: manipulation;
@@ -11301,8 +11315,8 @@ document.addEventListener("DOMContentLoaded", () => {
   </script>
 
   <!-- Capa de sync e importación (no reemplaza la lógica de ventas/cajas de Gemini y Claude) -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.11/dist/dexie.min.js" integrity="sha384-cPcqy69aXDd/DVAhVjR7F1pRGPSPFhhPA108OQ8DcgTdZixJZc3W4gzurSW1WfgH" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js" integrity="sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.11/dist/dexie.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js"></script>
 </body>
 </html>
