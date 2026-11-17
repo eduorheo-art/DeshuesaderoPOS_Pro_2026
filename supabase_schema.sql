@@ -78,6 +78,8 @@ alter table yonke_expenses add column if not exists owner_id uuid default auth.u
 
 -- Columnas de negocio para Patio Compartido (FaceCar & Autopartes El Meyuca)
 alter table yonke_parts add column if not exists negocio text;
+alter table yonke_parts add column if not exists demanda text;
+alter table yonke_parts add column if not exists busquedas_info text;
 alter table yonke_vehicles add column if not exists negocio text;
 alter table yonke_sales add column if not exists negocio text;
 alter table yonke_sales add column if not exists vendedor_negocio text;

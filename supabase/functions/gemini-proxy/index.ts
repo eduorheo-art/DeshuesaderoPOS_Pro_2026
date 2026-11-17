@@ -12,14 +12,20 @@ const jsonResponse = (origin: string, status: number, body: unknown) =>
   });
 
 Deno.serve(async request => {
-  const origin = request.headers.get("Origin") || "";
-  const allowedOrigins = (Deno.env.get("YONKE_ALLOWED_ORIGINS") || "")
-    .split(",")
-    .map(value => value.trim())
-    .filter(Boolean);
+  const origin = (request.headers.get("Origin") || "").replace(/\/$/, "");
+  const allowedOrigins = Array.from(new Set([
+    "https://eduorheo-art.github.io",
+    ...(Deno.env.get("YONKE_ALLOWED_ORIGINS") || "")
+      .split(",")
+      .map(value => value.trim().replace(/\/$/, ""))
+      .filter(Boolean)
+  ]));
 
   if (!origin || !allowedOrigins.includes(origin)) {
-    return new Response("Forbidden", { status: 403 });
+    const headers = origin
+      ? { ...corsHeaders(origin), "Content-Type": "application/json" }
+      : { "Content-Type": "application/json" };
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), { status: 403, headers });
   }
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders(origin) });
