@@ -263,15 +263,15 @@ class AIRegisterManager {
 
     try {
       const imageParts = this.currentPhotos.map(photo => ({
-        inline_data: {
-          mime_type: photo.split(";")[0].split(":")[1] || "image/jpeg",
+        inlineData: {
+          mimeType: photo.split(";")[0].split(":")[1] || "image/jpeg",
           data: photo.split(",")[1]
         }
       }));
       if (imageParts.length === 0 && this.currentPhoto) {
         imageParts.push({
-          inline_data: {
-            mime_type: this.currentPhoto.split(";")[0].split(":")[1] || "image/jpeg",
+          inlineData: {
+            mimeType: this.currentPhoto.split(";")[0].split(":")[1] || "image/jpeg",
             data: this.currentPhoto.split(",")[1]
           }
         });

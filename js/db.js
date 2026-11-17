@@ -274,7 +274,7 @@ class YonkeDB {
       precio_base: Number(partData.precio_base) || 0,
       precio_minimo: Number(partData.precio_minimo) || 0,
       cantidad: qty,
-      costo_mercancia_unitario: partData.costo_mercancia_unitario !== undefined && partData.costo_mercancia_unitario !== null && partData.costo_mercancia_unitario !== "" ? Number(partData.costo_mercancia_unitario) : null,
+      costo_mercancia_unitario: (partData.costo_mercancia_unitario !== undefined && partData.costo_mercancia_unitario !== null && partData.costo_mercancia_unitario !== "") ? Number(partData.costo_mercancia_unitario) : (partData.costo !== undefined && partData.costo !== null && partData.costo !== "" ? Number(partData.costo) : null),
       venta_final: partData.venta_final !== null && partData.venta_final !== undefined && partData.venta_final !== "" ? Number(partData.venta_final) : null,
       fecha_venta: partData.fecha_venta || null,
       observacion: partData.observacion || "",

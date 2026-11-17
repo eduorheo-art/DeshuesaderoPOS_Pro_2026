@@ -179,8 +179,8 @@ Responde ÚNICAMENTE un JSON válido con esta estructura (sin texto adicional fu
             parts: [
               { text: PROMPT_OEM_MANUALS },
               {
-                inline_data: {
-                  mime_type: mimeType,
+                inlineData: {
+                  mimeType: mimeType,
                   data: base64Data
                 }
               }
@@ -204,26 +204,14 @@ Responde ÚNICAMENTE un JSON válido con esta estructura (sin texto adicional fu
 
       // Fallback si no hay proxy o conexión
       if (!data) {
-        if (typeof OEM_FALLBACK_KNOWLEDGE !== "undefined" && OEM_FALLBACK_KNOWLEDGE.length) {
-          const fb = OEM_FALLBACK_KNOWLEDGE[0];
-          data = {
-            pieza: fb.pieza,
-            vehiculo_donador: fb.vehiculo_donador,
-            precio_sugerido: fb.precio_base_sugerido,
-            compatibilidad: fb.compatibilidad_cruzada,
-            fuente_manual_oem: fb.fuente_oem,
-            observacion: fb.observacion
-          };
-        } else {
-          data = {
-            pieza: "Pieza automotriz identificada",
-            vehiculo_donador: "Vehículo donador",
-            precio_sugerido: 500,
-            compatibilidad: "Revisar compatibilidad física OEM",
-            fuente_manual_oem: "Manual oficial del fabricante",
-            observacion: "Pieza fuera de inventario inspeccionada visualmente"
-          };
-        }
+        data = {
+          pieza: "Pieza automotriz no catalogada",
+          vehiculo_donador: "Vehículo por determinar",
+          precio_sugerido: 0,
+          compatibilidad: "Verificar según catálogo/manual OEM oficial",
+          fuente_manual_oem: "Inspección manual (IA no disponible o sin conexión)",
+          observacion: "No se pudo obtener análisis en línea de IA. Capture los datos manualmente."
+        };
       }
 
       // Rellenar campos de la interfaz

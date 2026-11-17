@@ -89,12 +89,16 @@ class VehicleValuatorManager {
     const anioEl = document.getElementById("valuator-anio-input");
     const motorEl = document.getElementById("valuator-motor-input");
     const fallasEl = document.getElementById("valuator-fallas-input");
+    const colorEl = document.getElementById("valuator-color-input");
 
     this.marca = (marcaEl && marcaEl.value.trim()) || "Ford";
     this.vehiculo = (vehiculoEl && vehiculoEl.value.trim()) || "Explorer";
     this.anio = (anioEl && anioEl.value.trim()) || "2006";
     this.motor = (motorEl && motorEl.value.trim()) || "4.0L V6";
     this.fallas = (fallasEl && fallasEl.value.trim()) || "";
+    if (colorEl && colorEl.value.trim()) {
+      this.vehicleColor = colorEl.value.trim();
+    }
 
     this.currentModelName = `${this.marca} ${this.vehiculo} ${this.anio} ${this.motor}`.trim();
     if (this.lastInspectionModelName && (
@@ -229,7 +233,12 @@ class VehicleValuatorManager {
   }
 
   resetVisualInspection() {
-    this.vehicleColor = "Por verificar";
+    const colorEl = document.getElementById("valuator-color-input");
+    if (colorEl && colorEl.value.trim()) {
+      this.vehicleColor = colorEl.value.trim();
+    } else {
+      this.vehicleColor = "Por verificar";
+    }
     this.referenceImageUrl = "";
     this.selectedVehicleMainImage = "";
     this.suggestedImages = [];
@@ -1335,11 +1344,17 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
       }
       if (statusText) statusText.textContent = "Analizando color, carrocería y las cinco zonas del vehículo...";
       const pieceNames = this.currentPiecesList.map(item => item.pieza);
-      const prompt = `Analiza las fotos adjuntas del vehículo ${this.currentModelName}. Fallas reportadas: ${JSON.stringify(this.fallas)}. Las imágenes indican su zona en la etiqueta de texto anterior a cada foto.
-Determina el color exterior predominante y qué piezas de esta lista muestran daño físico visible: ${JSON.stringify(pieceNames)}.
+      const prompt = `Analiza con rigor pericial las fotos adjuntas del vehículo ${this.currentModelName}. Fallas reportadas: ${JSON.stringify(this.fallas)}. Las imágenes indican su zona física en el texto anterior a cada foto.
+
+1. IDENTIFICACIÓN PRECISA DEL COLOR EXTERIOR:
+Examina minuciosamente la pintura exterior de la lámina/carrocería del auto en las fotos de Frente, Costados y Trasera. Identifica el color automotriz real y su tonalidad específica en español (ejemplos: "Rojo cereza / Tinto", "Azul marino", "Blanco", "Gris plata", "Gris Oxford / Grafito", "Negro", "Arena / Dorado", "Verde", "Beige", etc.). Ignora reflejos de luz, sombras del piso, vidrios o interiores. Devuelve el nombre exacto de este color en el campo "color" en español.
+
+2. INSPECCIÓN DE DAÑOS Y CHOQUE:
+Determina qué piezas de esta lista muestran daño físico visible: ${JSON.stringify(pieceNames)}.
 Evalúa también si las cinco zonas (frente, costado izquierdo, costado derecho, trasera e interior) tienen cobertura suficiente para descartar razonablemente un choque.
+
 Devuelve únicamente JSON válido con esta forma:
-{"color":"color exterior o No identificado","collision_damage_visible":true,"mechanical_or_electrical_only":false,"coverage_sufficient":false,"damaged_parts":["nombre exacto de una pieza de la lista"],"reason":"motivo breve"}
+{"color":"color exterior exacto en español","collision_damage_visible":true,"mechanical_or_electrical_only":false,"coverage_sufficient":false,"damaged_parts":["nombre exacto de una pieza de la lista"],"reason":"motivo breve"}
 Reglas: collision_damage_visible solo es true ante daño de colisión visible; mechanical_or_electrical_only solo es true cuando las fallas reportadas son mecánicas o eléctricas y las fotos no muestran daño de colisión; coverage_sufficient solo es true si las fotos permiten evaluar las cinco zonas. Si la imagen es ambigua, no afirmes que no hubo choque ni que la cobertura es suficiente. No infieras piezas dañadas solo por la presencia de una foto; devuelve nombres exactos de la lista.`;
       const parts = [{ text: prompt }];
       photos.forEach(({ label, photo }) => {
@@ -1375,6 +1390,10 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       }
 
       this.vehicleColor = analysis.color.trim().slice(0, 60) || "Por verificar";
+      const colorInput = document.getElementById("valuator-color-input");
+      if (colorInput && this.vehicleColor !== "Por verificar") {
+        colorInput.value = this.vehicleColor;
+      }
 
       // Detección de choque: IA visual, piezas de carrocería dañadas o falla textual de impacto
       const fallasText = (this.fallas || "").toLowerCase();
@@ -1470,7 +1489,7 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
               </div>
               <div class="text-[11px] text-slate-600 pt-1 border-t border-amber-200 flex items-center justify-between">
                 <span>Piezas con daño visible marcadas: <strong>${countMarked}</strong></span>
-                <span class="text-slate-500">Color detectado: <strong>${this.vehicleColor}</strong></span>
+                <span class="text-slate-600 flex items-center gap-1.5 font-bold">🎨 Color: <input type="text" value="${this.vehicleColor}" class="px-2 py-0.5 rounded border border-slate-300 font-bold text-slate-800 text-xs bg-white w-36" title="Puedes editar o afinar el color" oninput="window.vehicleValuatorManager.vehicleColor = this.value.trim(); const el = document.getElementById('valuator-color-input'); if(el) el.value = this.value.trim();"></span>
               </div>
             </div>
           `;
@@ -1526,7 +1545,7 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
               </div>
               <div class="text-[11px] text-slate-600 pt-1 border-t border-emerald-200 flex items-center justify-between">
                 <span>Piezas con daño marcadas: <strong>${countMarked}</strong></span>
-                <span class="text-slate-500">Color detectado: <strong>${this.vehicleColor}</strong></span>
+                <span class="text-slate-600 flex items-center gap-1.5 font-bold">🎨 Color: <input type="text" value="${this.vehicleColor}" class="px-2 py-0.5 rounded border border-slate-300 font-bold text-slate-800 text-xs bg-white w-36" title="Puedes editar o afinar el color" oninput="window.vehicleValuatorManager.vehicleColor = this.value.trim(); const el = document.getElementById('valuator-color-input'); if(el) el.value = this.value.trim();"></span>
               </div>
             </div>
           `;
@@ -1707,6 +1726,11 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
     const offerEl = document.getElementById("val-oferta-sugerida");
     if (offerEl) offerEl.textContent = `$${ofertaCalculada.toLocaleString()} MXN`;
 
+    const dealPriceInput = document.getElementById("valuator-deal-price");
+    if (dealPriceInput && (!dealPriceInput.value || dealPriceInput.value === "0")) {
+      dealPriceInput.value = ofertaCalculada > 0 ? ofertaCalculada : "";
+    }
+
     this.lastCalculatedOffer = ofertaCalculada;
     this.lastRescatable = valorRescatable;
     this.lastAltaMediaRescatable = valorAltaYMedia;
@@ -1715,11 +1739,33 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
   // --- TRATO HECHO: ALTA EN PATIO E INVENTARIO CON REGLAS DE PRECIO (BASE MÁS ALTO Y MÍNIMO 3:1) ---
   buyAndRegisterToInventory() {
     this.readFormInputs();
-    const model = this.currentModelName || "Vehículo Inspeccionado";
+    const model = this.currentModelName || `${this.marca} ${this.vehiculo} ${this.anio} ${this.motor}`.trim();
+
+    // 0. Asegurar que exista catálogo de despiece para este vehículo
+    if (!this.currentPiecesList || this.currentPiecesList.length === 0) {
+      this.currentPiecesList = this.generateOfficialOEMDespiece(this.marca, this.vehiculo, this.anio, this.motor, this.fallas);
+      this.damagedPieceIndexes.clear();
+      this.currentPiecesList.forEach((item, idx) => {
+        if (item.daniada) this.damagedPieceIndexes.add(idx);
+      });
+      this.calculateOffer();
+    }
+
+    // 1. Obtener costo de compra pactado
     const dealPriceInput = document.getElementById("valuator-deal-price");
-    const costoCompra = dealPriceInput ? parseFloat(dealPriceInput.value) : NaN;
+    let costoCompra = dealPriceInput ? parseFloat(dealPriceInput.value) : NaN;
     if (isNaN(costoCompra) || costoCompra <= 0) {
-      alert("Por favor ingresa un monto final acordado válido mayor a cero.");
+      if (this.lastCalculatedOffer > 0) {
+        costoCompra = this.lastCalculatedOffer;
+        if (dealPriceInput) dealPriceInput.value = costoCompra;
+      } else {
+        const userInput = prompt("Introduce el monto final acordado de compra (MXN):", "15000");
+        costoCompra = parseFloat(userInput);
+        if (dealPriceInput && !isNaN(costoCompra)) dealPriceInput.value = costoCompra;
+      }
+    }
+    if (isNaN(costoCompra) || costoCompra <= 0) {
+      alert("Por favor ingresa un monto final acordado válido mayor a cero para completar el registro.");
       return;
     }
 
@@ -1733,41 +1779,49 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
     ].filter(photo => typeof photo === "string" && (/^https:\/\//i.test(photo) || /^data:image\//i.test(photo)));
     const uniqueVehiclePhotos = [...new Set(allVehiclePhotos)];
 
-    // 1. Dar de alta el vehículo en patio (yonkeDB)
+    // Color final del vehículo (prioriza input visible o inspección IA)
+    const colorInput = document.getElementById("valuator-color-input");
+    const colorFinal = (colorInput && colorInput.value.trim())
+      || (this.vehicleColor && this.vehicleColor !== "Por verificar" ? this.vehicleColor : "No especificado");
+
+    // 2. Dar de alta el vehículo en patio (yonkeDB)
     if (window.yonkeDB && typeof window.yonkeDB.addVehicle === "function") {
       window.yonkeDB.addVehicle({
         modelo: model,
         anio: this.anio || "N/A",
         costo: costoCompra,
         fecha_ingreso: new Date().toISOString().split("T")[0],
-        color: this.lastInspectionModelName === this.currentModelName ? this.vehicleColor : "Por verificar",
+        color: colorFinal,
         vin: vinInput,
         foto_principal: mainPhoto,
         fotos: uniqueVehiclePhotos,
-        notas: `Comprado tras valuación in situ con regla 3:1. Rescatable: $${this.lastRescatable.toLocaleString()}`
+        notas: `Comprado tras valuación in situ con regla 3:1. Rescatable: $${(this.lastRescatable || 0).toLocaleString()}`
       });
     }
 
-    // 2. Cálculo del factor de precio mínimo para recuperar inversión inicial (Costo + Grúa) en menor tiempo posible
-    const inversionTotal = costoCompra + this.gruaCost;
+    // 3. Distribución equitativa y ponderada del COSTO por pieza
+    const inversionTotal = costoCompra + (this.gruaCost || 0);
+    const piezasSanas = this.currentPiecesList.filter((_, idx) => !this.damagedPieceIndexes.has(idx));
+    const totalSanas = piezasSanas.length || 1;
+    const totalValorRescatable = piezasSanas.reduce((sum, item) => sum + (Number(item.precio_mercado) || 0), 0) || 1;
     const baseAltaMedia = this.lastAltaMediaRescatable || 1;
-    // factor para que la suma de precios mínimos de piezas de alta y media cubra exactamente la inversión
     const factorRecuperacion = Math.min(0.9, Math.max(0.2, inversionTotal / baseAltaMedia));
 
     let piezasAgregadasCount = 0;
     this.currentPiecesList.forEach((item, idx) => {
       if (!this.damagedPieceIndexes.has(idx)) {
-        // PRECIO BASE: El mejor y más alto encontrado en plataformas digitales
         const precioBase = Math.round(item.precio_mercado);
 
-        // PRECIO MÍNIMO: El que reparte el cálculo de 3:1 para obtener la inversión inicial en el menor tiempo posible
         let precioMinimo = 0;
         if (item.demanda === "Alta" || item.demanda === "Media") {
           precioMinimo = Math.max(250, Math.round((precioBase * factorRecuperacion) / 50) * 50);
         } else {
-          // Demanda baja: margen protector
           precioMinimo = Math.max(150, Math.round((precioBase * 0.50) / 50) * 50);
         }
+
+        // Costo unitario ponderado proporcional al valor comercial de la pieza
+        const pesoPieza = totalValorRescatable > 0 ? (precioBase / totalValorRescatable) : (1 / totalSanas);
+        const costoUnitario = Math.max(50, Math.round((inversionTotal * pesoPieza) / 50) * 50);
 
         if (window.yonkeDB && typeof window.yonkeDB.addPart === "function") {
           window.yonkeDB.addPart({
@@ -1779,9 +1833,11 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
             estado: "En existencia",
             precio_base: precioBase,
             precio_minimo: precioMinimo,
-            demanda: item.demanda,
+            costo_mercancia_unitario: costoUnitario,
+            costo: costoUnitario,
+            demanda: item.demanda || "Media",
             compatibilidad: item.compatibilidad || `Manual OEM ${this.marca}: compatible con plataforma de ${this.vehiculo}`,
-            observacion: `Inspección In-Situ: Pieza sana. Demanda: ${item.demanda} (${item.busquedas_info})`,
+            observacion: `Inspección In-Situ: Pieza sana. Color vehículo: ${colorFinal}. Demanda: ${item.demanda || 'Media'}`,
             fotos: mainPhoto ? [mainPhoto] : [],
             ubicacion_patio: `En carrocería ${model}`
           });
@@ -1790,26 +1846,31 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       }
     });
 
-    // Refrescar vistas del sistema si están activas
+    // 4. Refrescar todas las vistas para reflejar el auto y las piezas al instante
     if (window.salesManager) {
-      if (typeof window.salesManager.renderVehicleFilterDropdown === "function") window.salesManager.renderVehicleFilterDropdown();
+      if (typeof window.salesManager.populateMarcaDropdown === "function") window.salesManager.populateMarcaDropdown();
+      if (typeof window.salesManager.renderSalesSelectionButtons === "function") window.salesManager.renderSalesSelectionButtons();
       if (typeof window.salesManager.renderPartsGrid === "function") window.salesManager.renderPartsGrid();
     }
     if (window.dashboardManager) {
       if (typeof window.dashboardManager.populateVehicleSelector === "function") window.dashboardManager.populateVehicleSelector();
       if (typeof window.dashboardManager.updateUI === "function") window.dashboardManager.updateUI();
     }
-    if (window.appManager && typeof window.appManager.renderInventoryTable === "function") {
-      window.appManager.renderInventoryTable();
+    if (window.appManager) {
+      window.appManager.inventoryBrand = this.marca;
+      window.appManager.inventoryVehicle = model;
+      if (typeof window.appManager.initializeInventoryFilters === "function") window.appManager.initializeInventoryFilters();
+      if (typeof window.appManager.renderInventoryTable === "function") window.appManager.renderInventoryTable();
     }
 
     alert(
       `🎉 ¡VEHÍCULO COMPRADO E INGRESADO A PATIO CON ÉXITO!\n\n` +
-      `🚗 ${model}\n` +
-      `💰 Costo de compra: $${costoCompra.toLocaleString()} MXN\n` +
-      `📦 ${piezasAgregadasCount} refacciones OEM cargadas al inventario.\n\n` +
+      `🚗 ${model} (${colorFinal})\n` +
+      `💰 Costo de compra total: $${costoCompra.toLocaleString()} MXN\n` +
+      `📦 ${piezasAgregadasCount} refacciones OEM cargadas al inventario con su costo unitario asignado.\n\n` +
       `• Precios base: Máximo valor de mercado digital.\n` +
-      `• Precios mínimos: Distribuidos con la regla 3:1 para liquidación y retorno rápido del capital.`
+      `• Precios mínimos: Distribuidos con la regla 3:1.\n` +
+      `• Costo unitario: Registrado para cálculo de utilidad en cada pieza.`
     );
   }
 }

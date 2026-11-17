@@ -1564,6 +1564,16 @@
 
       </div>
       <div id="finance-subview-sales" class="hidden space-y-6">
+        <!-- Ventas Fiadas Pendientes -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-violet-200">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-black text-slate-900 flex items-center gap-2">🤝 Ventas Fiadas Pendientes</h2>
+            <span id="fiado-count-badge" class="text-xs font-black px-2.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">0 pendientes</span>
+          </div>
+          <div id="fiado-list-container" class="space-y-2 text-xs">
+            <p class="text-slate-400 italic">No hay ventas fiadas pendientes.</p>
+          </div>
+        </div>
         <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
           <h2 class="text-lg font-black text-slate-900 mb-3">Historial de Ventas</h2>
           <div class="flex flex-wrap items-center gap-3">
@@ -1600,7 +1610,7 @@
         </div>
 
         <!-- Campos de Datos Textuales del Vehículo -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 mt-4">
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">Marca</label>
             <input 
@@ -1657,6 +1667,20 @@
               id="valuator-motor-input" 
               value="4.0L V6"
               placeholder="ej: 4.0L V6, 5.3L V8, 2.5L 4Cil..." 
+              class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+              <span>Color Exterior</span>
+              <span class="text-[10px] text-blue-600 font-semibold">(IA / Manual)</span>
+            </label>
+            <input 
+              type="text" 
+              id="valuator-color-input" 
+              value=""
+              placeholder="Detectado por IA o escribe..." 
               class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -2015,6 +2039,7 @@
                 <th class="py-2.5 px-3">Demanda</th>
                 <th class="py-2.5 px-3">Precio Base</th>
                 <th class="py-2.5 px-3">Precio Mínimo</th>
+                <th class="py-2.5 px-3 text-indigo-700">Costo</th>
                 <th class="py-2.5 px-3">Venta Final</th>
                 <th class="py-2.5 px-3">Fecha Venta</th>
                 <th class="py-2.5 px-3">Compatibilidad</th>
@@ -2516,6 +2541,54 @@
   </div>
 
 
+  <!-- MODAL: CONFIRMAR VENTA FIADA -->
+  <div id="fiado-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-violet-200">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-11 h-11 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-xl shadow-inner">🤝</div>
+        <div>
+          <h3 class="text-base font-black text-slate-900">Registrar Venta Fiada</h3>
+          <p class="text-xs text-slate-500">El cobro quedará aplazado hasta que lo liquides</p>
+        </div>
+      </div>
+      <div class="bg-violet-50 rounded-xl p-3 mb-4 text-xs space-y-1 border border-violet-100">
+        <div class="flex justify-between"><span class="text-slate-500 font-bold">Pieza:</span><span id="fiado-modal-part" class="font-bold text-slate-800 text-right max-w-[160px]"></span></div>
+        <div class="flex justify-between"><span class="text-slate-500 font-bold">Monto fiado:</span><span id="fiado-modal-price" class="font-black text-violet-700"></span></div>
+      </div>
+      <div class="space-y-3 mb-5">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Nombre del cliente *</label>
+          <input id="fiado-cliente-nombre" type="text" placeholder="Ej: Juan Pérez / El de la camioneta..." class="w-full px-3 py-2 text-sm border-2 border-violet-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Notas adicionales (opcional)</label>
+          <textarea id="fiado-notas" rows="2" placeholder="Ej: Regresa el viernes, número de teléfono..." class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-300 bg-slate-50 resize-none"></textarea>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="window.salesManager.closeFiadoModal()" class="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition">Cancelar</button>
+        <button onclick="window.salesManager.confirmFiado()" class="flex-1 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-black text-xs rounded-xl shadow transition">🤝 Confirmar Fiado</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: FIADO REGISTRADO CON ÉXITO -->
+  <div id="fiado-success-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-violet-200 text-center">
+      <div class="w-14 h-14 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-2xl mx-auto mb-3 shadow-inner">🤝</div>
+      <h3 class="text-xl font-black text-slate-900">¡Fiado Registrado!</h3>
+      <p class="text-sm text-slate-500 mt-1">La pieza salió del inventario. El cobro quedó pendiente.</p>
+      <div class="my-4 p-4 bg-violet-50 rounded-xl border border-violet-100 space-y-2 text-xs text-left">
+        <div class="flex justify-between"><span class="text-slate-500">Cliente:</span><span id="fiado-success-cliente" class="font-bold text-slate-800"></span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Pieza:</span><span id="fiado-success-pieza" class="font-bold text-slate-800 text-right max-w-[150px]"></span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Monto pendiente:</span><span id="fiado-success-monto" class="font-black text-violet-700"></span></div>
+      </div>
+      <p class="text-[11px] text-slate-400 mb-4">Puedes cobrarlo desde <strong>Finanzas → Ventas Fiadas</strong></p>
+      <button onclick="window.salesManager.closeFiadoSuccessModal()" class="w-full py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-black text-sm rounded-xl shadow transition">Entendido</button>
+    </div>
+  </div>
+
+
   <!-- 3. MODAL: CÁMARA Y FOTOS POR PIEZA -->
   <div id="camera-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
@@ -2541,7 +2614,7 @@
           <input type="file" accept="image/*" multiple onchange="window.imagesManager.handleFileUpload(event)" class="hidden"/>
         </label>
       </div>
-      <input type="file" id="ai-lens-camera-input" accept="image/*" capture="environment" class="hidden"/>
+      <input type="file" id="ai-lens-camera-input" accept="image/*" class="hidden"/>
       <input type="file" id="ai-lens-gallery-input" accept="image/*" multiple class="hidden"/>
 
       <!-- Cuadrícula de Fotos Actuales -->
@@ -3629,7 +3702,7 @@ class YonkeDB {
       precio_base: Number(partData.precio_base) || 0,
       precio_minimo: Number(partData.precio_minimo) || 0,
       cantidad: qty,
-      costo_mercancia_unitario: partData.costo_mercancia_unitario !== undefined && partData.costo_mercancia_unitario !== null && partData.costo_mercancia_unitario !== "" ? Number(partData.costo_mercancia_unitario) : null,
+      costo_mercancia_unitario: (partData.costo_mercancia_unitario !== undefined && partData.costo_mercancia_unitario !== null && partData.costo_mercancia_unitario !== "") ? Number(partData.costo_mercancia_unitario) : (partData.costo !== undefined && partData.costo !== null && partData.costo !== "" ? Number(partData.costo) : null),
       venta_final: partData.venta_final !== null && partData.venta_final !== undefined && partData.venta_final !== "" ? Number(partData.venta_final) : null,
       fecha_venta: partData.fecha_venta || null,
       observacion: partData.observacion || "",
@@ -3759,6 +3832,99 @@ class YonkeDB {
       ownerBusiness: partBiz,
       sellerBusiness: currentBiz
     };
+  }
+
+  // --- VENTA FIADA (Cobro Aplazado) ---
+  async processFiado({ partId, finalPrice, part, clienteNombre, notas }) {
+    const price = Number(finalPrice);
+    if (isNaN(price) || price <= 0) throw new Error("Precio inválido para fiado");
+
+    const now = new Date();
+    const dateFormatted = now.toISOString().split("T")[0];
+    const timeFormatted = now.toTimeString().split(" ")[0];
+    const currentBiz = this.getCurrentBusiness();
+    const partOwner = part.owner_id || this.ownerId;
+
+    // Descontar inventario igual que venta normal
+    const newQty = Math.max(0, (Number(part.cantidad) || 1) - 1);
+    part.cantidad = newQty;
+    part.estado = newQty === 0 ? "VENDIDO" : "En existencia";
+    part.venta_final = price;
+    part.fecha_venta = dateFormatted;
+    const fiadoTag = `[FIADO - ${clienteNombre}]`;
+    part.observacion = (part.observacion ? part.observacion + " | " : "") + fiadoTag;
+
+    const saleRecord = {
+      id: "sale-fiado-" + Date.now(),
+      pieza_id: part.id,
+      pieza_nombre: part.pieza,
+      vehiculo_origen: part.vehiculo_origen,
+      precio_base: part.precio_base,
+      precio_minimo: part.precio_minimo,
+      monto_cobrado: price,
+      caja_a: 0,
+      caja_b: 0,
+      fecha: dateFormatted,
+      hora: timeFormatted,
+      tipo: "fiado",
+      notas: (notas ? notas + " | " : "") + fiadoTag,
+      cliente_fiado: clienteNombre,
+      fiado_cobrado: false,
+      owner_id: partOwner,
+      negocio: part.negocio || currentBiz,
+      vendedor_negocio: currentBiz
+    };
+
+    this.sales.unshift(saleRecord);
+    await this.savePartToCloud(part);
+    try {
+      const { error } = await window.yonkeSupabaseClient.from("yonke_sales").insert([{
+        id: saleRecord.id,
+        pieza_id: saleRecord.pieza_id,
+        pieza_nombre: saleRecord.pieza_nombre,
+        vehiculo_origen: saleRecord.vehiculo_origen,
+        precio_base: saleRecord.precio_base,
+        precio_minimo: saleRecord.precio_minimo,
+        monto_cobrado: saleRecord.monto_cobrado,
+        caja_a: saleRecord.caja_a,
+        caja_b: saleRecord.caja_b,
+        fecha: saleRecord.fecha,
+        hora: saleRecord.hora,
+        tipo: saleRecord.tipo,
+        notas: saleRecord.notas,
+        owner_id: saleRecord.owner_id,
+        updated_at: new Date().toISOString()
+      }]);
+      if (error) console.warn("No se pudo guardar fiado en Supabase:", error.message);
+    } catch (e) {
+      console.warn("Fiado guardado solo local:", e.message);
+    }
+    this.persist();
+    return saleRecord;
+  }
+
+  async liquidarFiado(saleId) {
+    const sale = this.sales.find(s => s.id === saleId);
+    if (!sale || sale.tipo !== "fiado") throw new Error("Fiado no encontrado");
+    const price = Number(sale.monto_cobrado);
+    sale.caja_a = Number((price * 0.80).toFixed(2));
+    sale.caja_b = Number((price * 0.20).toFixed(2));
+    sale.tipo = "fiado_cobrado";
+    sale.fiado_cobrado = true;
+    sale.fecha_cobro = new Date().toISOString().split("T")[0];
+    sale.notas = (sale.notas || "") + " | [COBRADO]";
+    try {
+      await window.yonkeSupabaseClient.from("yonke_sales").update({
+        tipo: "fiado_cobrado",
+        caja_a: sale.caja_a,
+        caja_b: sale.caja_b,
+        notas: sale.notas,
+        updated_at: new Date().toISOString()
+      }).eq("id", saleId);
+    } catch (e) {
+      console.warn("No se pudo actualizar fiado en Supabase:", e.message);
+    }
+    this.persist();
   }
 
   // --- PIEZAS FUERA DE INVENTARIO (Pieza no catalogada vendida al momento) ---
@@ -5059,6 +5225,18 @@ class SalesManager {
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
             <span>Cobrar</span>
           </button>
+
+          <!-- Botón Fiar -->
+          <button 
+            type="button"
+            data-sale-fiar
+            data-part-id="${String(part.id).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char])}"
+            class="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white font-black text-sm rounded-xl shadow-md hover:shadow-lg transition flex items-center gap-2 active:scale-95 whitespace-nowrap cursor-pointer order-4"
+            title="Registrar venta fiada (cobro pendiente)"
+          >
+            <span>🤝</span>
+            <span>Fiar</span>
+          </button>
         </div>
       `;
       const input = inputContainer.querySelector("[data-sale-input]");
@@ -5068,6 +5246,9 @@ class SalesManager {
       inputContainer.querySelector("[data-sale-cancel]")?.addEventListener("click", () => this.cancelSaleAction());
       inputContainer.querySelector("[data-sale-submit]")?.addEventListener("click", event => {
         this.executeSale(event.currentTarget.dataset.partId);
+      });
+      inputContainer.querySelector("[data-sale-fiar]")?.addEventListener("click", event => {
+        this.openFiadoModal(event.currentTarget.dataset.partId);
       });
     }
   }
@@ -5132,6 +5313,82 @@ class SalesManager {
     const modal = document.getElementById("sales-emergency-price-modal");
     if (modal) modal.classList.add("hidden");
     this.pendingLowPriceSale = null;
+  }
+
+  // --- VENTA FIADA (Cobro Aplazado) ---
+  openFiadoModal(partId) {
+    const input = document.querySelector("#ml-detail-sale-input-container [data-sale-input]");
+    const finalPrice = input ? parseFloat(input.value) : NaN;
+    if (isNaN(finalPrice) || finalPrice <= 0) {
+      alert("Ingresa el precio acordado antes de fiar.");
+      return;
+    }
+    const part = window.yonkeDB.getPartById(partId);
+    if (!part) return;
+    this._pendingFiado = { partId, finalPrice, part };
+    const modal = document.getElementById("fiado-modal");
+    if (modal) {
+      document.getElementById("fiado-modal-part").textContent = part.pieza;
+      document.getElementById("fiado-modal-price").textContent = `$${finalPrice.toLocaleString()} MXN`;
+      document.getElementById("fiado-cliente-nombre").value = "";
+      document.getElementById("fiado-notas").value = "";
+      modal.classList.remove("hidden");
+    }
+  }
+
+  closeFiadoModal() {
+    const modal = document.getElementById("fiado-modal");
+    if (modal) modal.classList.add("hidden");
+    this._pendingFiado = null;
+  }
+
+  async confirmFiado() {
+    if (!this._pendingFiado) return;
+    const { partId, finalPrice, part } = this._pendingFiado;
+    const clienteNombre = (document.getElementById("fiado-cliente-nombre")?.value || "").trim() || "Cliente sin nombre";
+    const notas = (document.getElementById("fiado-notas")?.value || "").trim();
+    this.closeFiadoModal();
+    try {
+      await window.yonkeDB.processFiado({ partId, finalPrice, part, clienteNombre, notas });
+      this.discardDraft();
+      this.hideDetailView();
+      this.populatePiezaDropdown(this.selectedMarca, this.selectedVehiculo);
+      if (window.financesManager) window.financesManager.updateUI();
+      if (window.dashboardManager) window.dashboardManager.updateUI();
+      if (window.appManager) window.appManager.renderInventoryTable();
+      this.refreshSalesHistory();
+      const modal = document.getElementById("fiado-success-modal");
+      if (modal) {
+        document.getElementById("fiado-success-cliente").textContent = clienteNombre;
+        document.getElementById("fiado-success-pieza").textContent = part.pieza;
+        document.getElementById("fiado-success-monto").textContent = `$${finalPrice.toLocaleString()} MXN`;
+        modal.classList.remove("hidden");
+      } else {
+        alert(`🤝 Venta Fiada registrada.\nCliente: ${clienteNombre}\nPieza: ${part.pieza}\nMonto pendiente: $${finalPrice.toLocaleString()} MXN\n\nEl cobro quedó aplazado en el historial de fiados.`);
+      }
+    } catch (err) {
+      alert("Error al registrar fiado: " + err.message);
+    }
+  }
+
+  closeFiadoSuccessModal() {
+    const modal = document.getElementById("fiado-success-modal");
+    if (modal) modal.classList.add("hidden");
+  }
+
+  // --- COBRAR FIADO PENDIENTE (desde Finanzas) ---
+  async cobrarFiado(saleId) {
+    const sale = window.yonkeDB.sales.find(s => s.id === saleId);
+    if (!sale || sale.tipo !== "fiado") return;
+    const confirm = window.confirm(`¿Cobrar el fiado de "${sale.pieza_nombre}" a ${sale.cliente_fiado || "cliente"}?\nMonto: $${Number(sale.monto_cobrado).toLocaleString()} MXN`);
+    if (!confirm) return;
+    try {
+      await window.yonkeDB.liquidarFiado(saleId);
+      if (window.financesManager) window.financesManager.updateUI();
+      alert(`✅ Fiado cobrado y liquidado. Dinero ingresado a las cajas.`);
+    } catch (err) {
+      alert("Error al cobrar fiado: " + err.message);
+    }
   }
 
   async completeSaleTransaction(partId, finalPrice, part) {
@@ -5929,8 +6186,8 @@ Responde ÚNICAMENTE un JSON válido con esta estructura (sin texto adicional fu
             parts: [
               { text: PROMPT_OEM_MANUALS },
               {
-                inline_data: {
-                  mime_type: mimeType,
+                inlineData: {
+                  mimeType: mimeType,
                   data: base64Data
                 }
               }
@@ -5954,26 +6211,14 @@ Responde ÚNICAMENTE un JSON válido con esta estructura (sin texto adicional fu
 
       // Fallback si no hay proxy o conexión
       if (!data) {
-        if (typeof OEM_FALLBACK_KNOWLEDGE !== "undefined" && OEM_FALLBACK_KNOWLEDGE.length) {
-          const fb = OEM_FALLBACK_KNOWLEDGE[0];
-          data = {
-            pieza: fb.pieza,
-            vehiculo_donador: fb.vehiculo_donador,
-            precio_sugerido: fb.precio_base_sugerido,
-            compatibilidad: fb.compatibilidad_cruzada,
-            fuente_manual_oem: fb.fuente_oem,
-            observacion: fb.observacion
-          };
-        } else {
-          data = {
-            pieza: "Pieza automotriz identificada",
-            vehiculo_donador: "Vehículo donador",
-            precio_sugerido: 500,
-            compatibilidad: "Revisar compatibilidad física OEM",
-            fuente_manual_oem: "Manual oficial del fabricante",
-            observacion: "Pieza fuera de inventario inspeccionada visualmente"
-          };
-        }
+        data = {
+          pieza: "Pieza automotriz no catalogada",
+          vehiculo_donador: "Vehículo por determinar",
+          precio_sugerido: 0,
+          compatibilidad: "Verificar según catálogo/manual OEM oficial",
+          fuente_manual_oem: "Inspección manual (IA no disponible o sin conexión)",
+          observacion: "No se pudo obtener análisis en línea de IA. Capture los datos manualmente."
+        };
       }
 
       // Rellenar campos de la interfaz
@@ -6165,6 +6410,7 @@ class FinancesManager {
   updateUI() {
     const data = window.yonkeDB.getFinancesSummary();
     if (!data) return;
+    this.renderFiadoList();
     const report = window.yonkeDB.getBusinessFinanceSummary();
     const money = value => `$${Number(value || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const setAmount = (id, value) => {
@@ -6424,6 +6670,28 @@ class FinancesManager {
 
     this.updateUI();
     alert(`👤 Retiro de sueldo por ${amount.toLocaleString()} registrado con éxito.`);
+  }
+
+  renderFiadoList() {
+    const container = document.getElementById("fiado-list-container");
+    const badge = document.getElementById("fiado-count-badge");
+    if (!container || !window.yonkeDB) return;
+    const fiados = (window.yonkeDB.sales || []).filter(s => s.tipo === "fiado");
+    if (badge) badge.textContent = `${fiados.length} pendiente${fiados.length !== 1 ? "s" : ""}`;
+    if (fiados.length === 0) {
+      container.innerHTML = `<p class="text-slate-400 italic text-xs">No hay ventas fiadas pendientes.</p>`;
+      return;
+    }
+    container.innerHTML = fiados.map(f => `
+      <div class="flex items-center justify-between gap-2 bg-violet-50 border border-violet-100 rounded-xl px-3 py-2">
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-slate-800 text-xs truncate">${f.pieza_nombre || "Pieza"}</p>
+          <p class="text-[11px] text-slate-500 truncate">Cliente: <span class="font-bold text-violet-700">${f.cliente_fiado || "Sin nombre"}</span> · ${f.fecha || ""}</p>
+        </div>
+        <span class="font-black text-violet-700 text-xs whitespace-nowrap">$${Number(f.monto_cobrado).toLocaleString()}</span>
+        <button onclick="window.salesManager.cobrarFiado('${f.id}')" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white font-bold text-[11px] rounded-lg shadow transition whitespace-nowrap">💰 Cobrar</button>
+      </div>
+    `).join("");
   }
 }
 
@@ -6881,12 +7149,16 @@ class VehicleValuatorManager {
     const anioEl = document.getElementById("valuator-anio-input");
     const motorEl = document.getElementById("valuator-motor-input");
     const fallasEl = document.getElementById("valuator-fallas-input");
+    const colorEl = document.getElementById("valuator-color-input");
 
     this.marca = (marcaEl && marcaEl.value.trim()) || "Ford";
     this.vehiculo = (vehiculoEl && vehiculoEl.value.trim()) || "Explorer";
     this.anio = (anioEl && anioEl.value.trim()) || "2006";
     this.motor = (motorEl && motorEl.value.trim()) || "4.0L V6";
     this.fallas = (fallasEl && fallasEl.value.trim()) || "";
+    if (colorEl && colorEl.value.trim()) {
+      this.vehicleColor = colorEl.value.trim();
+    }
 
     this.currentModelName = `${this.marca} ${this.vehiculo} ${this.anio} ${this.motor}`.trim();
     if (this.lastInspectionModelName && (
@@ -7021,7 +7293,12 @@ class VehicleValuatorManager {
   }
 
   resetVisualInspection() {
-    this.vehicleColor = "Por verificar";
+    const colorEl = document.getElementById("valuator-color-input");
+    if (colorEl && colorEl.value.trim()) {
+      this.vehicleColor = colorEl.value.trim();
+    } else {
+      this.vehicleColor = "Por verificar";
+    }
     this.referenceImageUrl = "";
     this.selectedVehicleMainImage = "";
     this.suggestedImages = [];
@@ -8096,11 +8373,17 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
       }
       if (statusText) statusText.textContent = "Analizando color, carrocería y las cinco zonas del vehículo...";
       const pieceNames = this.currentPiecesList.map(item => item.pieza);
-      const prompt = `Analiza las fotos adjuntas del vehículo ${this.currentModelName}. Fallas reportadas: ${JSON.stringify(this.fallas)}. Las imágenes indican su zona en la etiqueta de texto anterior a cada foto.
-Determina el color exterior predominante y qué piezas de esta lista muestran daño físico visible: ${JSON.stringify(pieceNames)}.
+      const prompt = `Analiza con rigor pericial las fotos adjuntas del vehículo ${this.currentModelName}. Fallas reportadas: ${JSON.stringify(this.fallas)}. Las imágenes indican su zona física en el texto anterior a cada foto.
+
+1. IDENTIFICACIÓN PRECISA DEL COLOR EXTERIOR:
+Examina minuciosamente la pintura exterior de la lámina/carrocería del auto en las fotos de Frente, Costados y Trasera. Identifica el color automotriz real y su tonalidad específica en español (ejemplos: "Rojo cereza / Tinto", "Azul marino", "Blanco", "Gris plata", "Gris Oxford / Grafito", "Negro", "Arena / Dorado", "Verde", "Beige", etc.). Ignora reflejos de luz, sombras del piso, vidrios o interiores. Devuelve el nombre exacto de este color en el campo "color" en español.
+
+2. INSPECCIÓN DE DAÑOS Y CHOQUE:
+Determina qué piezas de esta lista muestran daño físico visible: ${JSON.stringify(pieceNames)}.
 Evalúa también si las cinco zonas (frente, costado izquierdo, costado derecho, trasera e interior) tienen cobertura suficiente para descartar razonablemente un choque.
+
 Devuelve únicamente JSON válido con esta forma:
-{"color":"color exterior o No identificado","collision_damage_visible":true,"mechanical_or_electrical_only":false,"coverage_sufficient":false,"damaged_parts":["nombre exacto de una pieza de la lista"],"reason":"motivo breve"}
+{"color":"color exterior exacto en español","collision_damage_visible":true,"mechanical_or_electrical_only":false,"coverage_sufficient":false,"damaged_parts":["nombre exacto de una pieza de la lista"],"reason":"motivo breve"}
 Reglas: collision_damage_visible solo es true ante daño de colisión visible; mechanical_or_electrical_only solo es true cuando las fallas reportadas son mecánicas o eléctricas y las fotos no muestran daño de colisión; coverage_sufficient solo es true si las fotos permiten evaluar las cinco zonas. Si la imagen es ambigua, no afirmes que no hubo choque ni que la cobertura es suficiente. No infieras piezas dañadas solo por la presencia de una foto; devuelve nombres exactos de la lista.`;
       const parts = [{ text: prompt }];
       photos.forEach(({ label, photo }) => {
@@ -8136,6 +8419,10 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       }
 
       this.vehicleColor = analysis.color.trim().slice(0, 60) || "Por verificar";
+      const colorInput = document.getElementById("valuator-color-input");
+      if (colorInput && this.vehicleColor !== "Por verificar") {
+        colorInput.value = this.vehicleColor;
+      }
 
       // Detección de choque: IA visual, piezas de carrocería dañadas o falla textual de impacto
       const fallasText = (this.fallas || "").toLowerCase();
@@ -8231,7 +8518,7 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
               </div>
               <div class="text-[11px] text-slate-600 pt-1 border-t border-amber-200 flex items-center justify-between">
                 <span>Piezas con daño visible marcadas: <strong>${countMarked}</strong></span>
-                <span class="text-slate-500">Color detectado: <strong>${this.vehicleColor}</strong></span>
+                <span class="text-slate-600 flex items-center gap-1.5 font-bold">🎨 Color: <input type="text" value="${this.vehicleColor}" class="px-2 py-0.5 rounded border border-slate-300 font-bold text-slate-800 text-xs bg-white w-36" title="Puedes editar o afinar el color" oninput="window.vehicleValuatorManager.vehicleColor = this.value.trim(); const el = document.getElementById('valuator-color-input'); if(el) el.value = this.value.trim();"></span>
               </div>
             </div>
           `;
@@ -8287,7 +8574,7 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
               </div>
               <div class="text-[11px] text-slate-600 pt-1 border-t border-emerald-200 flex items-center justify-between">
                 <span>Piezas con daño marcadas: <strong>${countMarked}</strong></span>
-                <span class="text-slate-500">Color detectado: <strong>${this.vehicleColor}</strong></span>
+                <span class="text-slate-600 flex items-center gap-1.5 font-bold">🎨 Color: <input type="text" value="${this.vehicleColor}" class="px-2 py-0.5 rounded border border-slate-300 font-bold text-slate-800 text-xs bg-white w-36" title="Puedes editar o afinar el color" oninput="window.vehicleValuatorManager.vehicleColor = this.value.trim(); const el = document.getElementById('valuator-color-input'); if(el) el.value = this.value.trim();"></span>
               </div>
             </div>
           `;
@@ -8472,6 +8759,11 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
     const offerEl = document.getElementById("val-oferta-sugerida");
     if (offerEl) offerEl.textContent = `$${ofertaCalculada.toLocaleString()} MXN`;
 
+    const dealPriceInput = document.getElementById("valuator-deal-price");
+    if (dealPriceInput && (!dealPriceInput.value || dealPriceInput.value === "0")) {
+      dealPriceInput.value = ofertaCalculada > 0 ? ofertaCalculada : "";
+    }
+
     this.lastCalculatedOffer = ofertaCalculada;
     this.lastRescatable = valorRescatable;
     this.lastAltaMediaRescatable = valorAltaYMedia;
@@ -8480,11 +8772,33 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
   // --- TRATO HECHO: ALTA EN PATIO E INVENTARIO CON REGLAS DE PRECIO (BASE MÁS ALTO Y MÍNIMO 3:1) ---
   buyAndRegisterToInventory() {
     this.readFormInputs();
-    const model = this.currentModelName || "Vehículo Inspeccionado";
+    const model = this.currentModelName || `${this.marca} ${this.vehiculo} ${this.anio} ${this.motor}`.trim();
+
+    // 0. Asegurar que exista catálogo de despiece para este vehículo
+    if (!this.currentPiecesList || this.currentPiecesList.length === 0) {
+      this.currentPiecesList = this.generateOfficialOEMDespiece(this.marca, this.vehiculo, this.anio, this.motor, this.fallas);
+      this.damagedPieceIndexes.clear();
+      this.currentPiecesList.forEach((item, idx) => {
+        if (item.daniada) this.damagedPieceIndexes.add(idx);
+      });
+      this.calculateOffer();
+    }
+
+    // 1. Obtener costo de compra pactado
     const dealPriceInput = document.getElementById("valuator-deal-price");
-    const costoCompra = dealPriceInput ? parseFloat(dealPriceInput.value) : NaN;
+    let costoCompra = dealPriceInput ? parseFloat(dealPriceInput.value) : NaN;
     if (isNaN(costoCompra) || costoCompra <= 0) {
-      alert("Por favor ingresa un monto final acordado válido mayor a cero.");
+      if (this.lastCalculatedOffer > 0) {
+        costoCompra = this.lastCalculatedOffer;
+        if (dealPriceInput) dealPriceInput.value = costoCompra;
+      } else {
+        const userInput = prompt("Introduce el monto final acordado de compra (MXN):", "15000");
+        costoCompra = parseFloat(userInput);
+        if (dealPriceInput && !isNaN(costoCompra)) dealPriceInput.value = costoCompra;
+      }
+    }
+    if (isNaN(costoCompra) || costoCompra <= 0) {
+      alert("Por favor ingresa un monto final acordado válido mayor a cero para completar el registro.");
       return;
     }
 
@@ -8498,41 +8812,49 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
     ].filter(photo => typeof photo === "string" && (/^https:\/\//i.test(photo) || /^data:image\//i.test(photo)));
     const uniqueVehiclePhotos = [...new Set(allVehiclePhotos)];
 
-    // 1. Dar de alta el vehículo en patio (yonkeDB)
+    // Color final del vehículo (prioriza input visible o inspección IA)
+    const colorInput = document.getElementById("valuator-color-input");
+    const colorFinal = (colorInput && colorInput.value.trim())
+      || (this.vehicleColor && this.vehicleColor !== "Por verificar" ? this.vehicleColor : "No especificado");
+
+    // 2. Dar de alta el vehículo en patio (yonkeDB)
     if (window.yonkeDB && typeof window.yonkeDB.addVehicle === "function") {
       window.yonkeDB.addVehicle({
         modelo: model,
         anio: this.anio || "N/A",
         costo: costoCompra,
         fecha_ingreso: new Date().toISOString().split("T")[0],
-        color: this.lastInspectionModelName === this.currentModelName ? this.vehicleColor : "Por verificar",
+        color: colorFinal,
         vin: vinInput,
         foto_principal: mainPhoto,
         fotos: uniqueVehiclePhotos,
-        notas: `Comprado tras valuación in situ con regla 3:1. Rescatable: $${this.lastRescatable.toLocaleString()}`
+        notas: `Comprado tras valuación in situ con regla 3:1. Rescatable: $${(this.lastRescatable || 0).toLocaleString()}`
       });
     }
 
-    // 2. Cálculo del factor de precio mínimo para recuperar inversión inicial (Costo + Grúa) en menor tiempo posible
-    const inversionTotal = costoCompra + this.gruaCost;
+    // 3. Distribución equitativa y ponderada del COSTO por pieza
+    const inversionTotal = costoCompra + (this.gruaCost || 0);
+    const piezasSanas = this.currentPiecesList.filter((_, idx) => !this.damagedPieceIndexes.has(idx));
+    const totalSanas = piezasSanas.length || 1;
+    const totalValorRescatable = piezasSanas.reduce((sum, item) => sum + (Number(item.precio_mercado) || 0), 0) || 1;
     const baseAltaMedia = this.lastAltaMediaRescatable || 1;
-    // factor para que la suma de precios mínimos de piezas de alta y media cubra exactamente la inversión
     const factorRecuperacion = Math.min(0.9, Math.max(0.2, inversionTotal / baseAltaMedia));
 
     let piezasAgregadasCount = 0;
     this.currentPiecesList.forEach((item, idx) => {
       if (!this.damagedPieceIndexes.has(idx)) {
-        // PRECIO BASE: El mejor y más alto encontrado en plataformas digitales
         const precioBase = Math.round(item.precio_mercado);
 
-        // PRECIO MÍNIMO: El que reparte el cálculo de 3:1 para obtener la inversión inicial en el menor tiempo posible
         let precioMinimo = 0;
         if (item.demanda === "Alta" || item.demanda === "Media") {
           precioMinimo = Math.max(250, Math.round((precioBase * factorRecuperacion) / 50) * 50);
         } else {
-          // Demanda baja: margen protector
           precioMinimo = Math.max(150, Math.round((precioBase * 0.50) / 50) * 50);
         }
+
+        // Costo unitario ponderado proporcional al valor comercial de la pieza
+        const pesoPieza = totalValorRescatable > 0 ? (precioBase / totalValorRescatable) : (1 / totalSanas);
+        const costoUnitario = Math.max(50, Math.round((inversionTotal * pesoPieza) / 50) * 50);
 
         if (window.yonkeDB && typeof window.yonkeDB.addPart === "function") {
           window.yonkeDB.addPart({
@@ -8544,9 +8866,11 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
             estado: "En existencia",
             precio_base: precioBase,
             precio_minimo: precioMinimo,
-            demanda: item.demanda,
+            costo_mercancia_unitario: costoUnitario,
+            costo: costoUnitario,
+            demanda: item.demanda || "Media",
             compatibilidad: item.compatibilidad || `Manual OEM ${this.marca}: compatible con plataforma de ${this.vehiculo}`,
-            observacion: `Inspección In-Situ: Pieza sana. Demanda: ${item.demanda} (${item.busquedas_info})`,
+            observacion: `Inspección In-Situ: Pieza sana. Color vehículo: ${colorFinal}. Demanda: ${item.demanda || 'Media'}`,
             fotos: mainPhoto ? [mainPhoto] : [],
             ubicacion_patio: `En carrocería ${model}`
           });
@@ -8555,26 +8879,31 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       }
     });
 
-    // Refrescar vistas del sistema si están activas
+    // 4. Refrescar todas las vistas para reflejar el auto y las piezas al instante
     if (window.salesManager) {
-      if (typeof window.salesManager.renderVehicleFilterDropdown === "function") window.salesManager.renderVehicleFilterDropdown();
+      if (typeof window.salesManager.populateMarcaDropdown === "function") window.salesManager.populateMarcaDropdown();
+      if (typeof window.salesManager.renderSalesSelectionButtons === "function") window.salesManager.renderSalesSelectionButtons();
       if (typeof window.salesManager.renderPartsGrid === "function") window.salesManager.renderPartsGrid();
     }
     if (window.dashboardManager) {
       if (typeof window.dashboardManager.populateVehicleSelector === "function") window.dashboardManager.populateVehicleSelector();
       if (typeof window.dashboardManager.updateUI === "function") window.dashboardManager.updateUI();
     }
-    if (window.appManager && typeof window.appManager.renderInventoryTable === "function") {
-      window.appManager.renderInventoryTable();
+    if (window.appManager) {
+      window.appManager.inventoryBrand = this.marca;
+      window.appManager.inventoryVehicle = model;
+      if (typeof window.appManager.initializeInventoryFilters === "function") window.appManager.initializeInventoryFilters();
+      if (typeof window.appManager.renderInventoryTable === "function") window.appManager.renderInventoryTable();
     }
 
     alert(
       `🎉 ¡VEHÍCULO COMPRADO E INGRESADO A PATIO CON ÉXITO!\n\n` +
-      `🚗 ${model}\n` +
-      `💰 Costo de compra: $${costoCompra.toLocaleString()} MXN\n` +
-      `📦 ${piezasAgregadasCount} refacciones OEM cargadas al inventario.\n\n` +
+      `🚗 ${model} (${colorFinal})\n` +
+      `💰 Costo de compra total: $${costoCompra.toLocaleString()} MXN\n` +
+      `📦 ${piezasAgregadasCount} refacciones OEM cargadas al inventario con su costo unitario asignado.\n\n` +
       `• Precios base: Máximo valor de mercado digital.\n` +
-      `• Precios mínimos: Distribuidos con la regla 3:1 para liquidación y retorno rápido del capital.`
+      `• Precios mínimos: Distribuidos con la regla 3:1.\n` +
+      `• Costo unitario: Registrado para cálculo de utilidad en cada pieza.`
     );
   }
 }
@@ -8820,7 +9149,7 @@ class ImagesManager {
 
   // --- ESCANEO CON IA (Estilo Google Lens para autopartes) ---
   triggerAIScan() {
-    const fileInput = document.getElementById("ai-lens-camera-input");
+    const fileInput = document.getElementById("ai-lens-gallery-input") || document.getElementById("ai-lens-camera-input");
     if (fileInput) fileInput.click();
   }
 
@@ -9802,15 +10131,15 @@ class AIRegisterManager {
 
     try {
       const imageParts = this.currentPhotos.map(photo => ({
-        inline_data: {
-          mime_type: photo.split(";")[0].split(":")[1] || "image/jpeg",
+        inlineData: {
+          mimeType: photo.split(";")[0].split(":")[1] || "image/jpeg",
           data: photo.split(",")[1]
         }
       }));
       if (imageParts.length === 0 && this.currentPhoto) {
         imageParts.push({
-          inline_data: {
-            mime_type: this.currentPhoto.split(";")[0].split(":")[1] || "image/jpeg",
+          inlineData: {
+            mimeType: this.currentPhoto.split(";")[0].split(":")[1] || "image/jpeg",
             data: this.currentPhoto.split(",")[1]
           }
         });
@@ -12019,6 +12348,7 @@ class AppManager {
           <td class="py-2.5 px-3 whitespace-nowrap">${demandaBadge}</td>
           <td class="py-2.5 px-3 font-black text-gray-900">${Number(p.precio_base).toLocaleString()}</td>
           <td class="py-2.5 px-3 font-bold text-amber-700">${Number(p.precio_minimo).toLocaleString()}</td>
+          <td class="py-2.5 px-3 font-bold text-indigo-600">${p.costo_mercancia_unitario !== null && p.costo_mercancia_unitario !== undefined && p.costo_mercancia_unitario !== "" ? `$${Number(p.costo_mercancia_unitario).toLocaleString()}` : (p.costo ? `$${Number(p.costo).toLocaleString()}` : '-')}</td>
           <td class="py-2.5 px-3 text-emerald-700 font-bold">${p.venta_final ? `${Number(p.venta_final).toLocaleString()}` : '-'}</td>
           <td class="py-2.5 px-3 text-gray-400 font-mono">${escapeHtml(fechaDisplay)}</td>
           <td class="py-2.5 px-3 text-gray-600 max-w-xs truncate" title="${escapeHtml(p.compatibilidad)}">${escapeHtml(p.compatibilidad || '-')}</td>

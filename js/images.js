@@ -226,7 +226,7 @@ class ImagesManager {
 
   // --- ESCANEO CON IA (Estilo Google Lens para autopartes) ---
   triggerAIScan() {
-    const fileInput = document.getElementById("ai-lens-camera-input");
+    const fileInput = document.getElementById("ai-lens-gallery-input") || document.getElementById("ai-lens-camera-input");
     if (fileInput) fileInput.click();
   }
 
