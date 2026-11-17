@@ -122,48 +122,58 @@ class ImagesManager {
   // Comprimir imagen usando Canvas HTML5 para que no pese nada y no agote almacenamiento local
   compressImage(file, maxWidth = 800, quality = 0.75) {
     return new Promise((resolve, reject) => {
-      const objectUrl = URL.createObjectURL(file);
-      const img = new Image();
-      const cleanup = () => {
-        img.onload = null;
-        img.onerror = null;
-        URL.revokeObjectURL(objectUrl);
-        img.removeAttribute("src");
+      if (!file) return reject(new Error("Archivo inválido"));
+
+      const readViaFileReader = () => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          processSource(e.target.result);
+        };
+        reader.onerror = () => {
+          reject(new Error("No se pudo leer el archivo de imagen."));
+        };
+        reader.readAsDataURL(file);
       };
 
-      img.onload = () => {
-        try {
-          let width = img.width;
-          let height = img.height;
+      const processSource = (src) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            let width = img.width || 800;
+            let height = img.height || 600;
 
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext("2d");
+            if (!ctx) throw new Error("No se pudo preparar el lienzo.");
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
+            canvas.width = 0;
+            canvas.height = 0;
+            resolve(compressedDataUrl);
+          } catch (error) {
+            resolve(src);
           }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext("2d");
-          if (!ctx) throw new Error("No se pudo preparar el lienzo para comprimir la imagen.");
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
-          canvas.width = 0;
-          canvas.height = 0;
-          cleanup();
-          resolve(compressedDataUrl);
-        } catch (error) {
-          cleanup();
-          reject(error);
-        }
+        };
+        img.onerror = () => {
+          if (typeof src === "string" && src.startsWith("data:")) {
+            resolve(src);
+          } else {
+            readViaFileReader();
+          }
+        };
+        img.src = src;
       };
-      img.onerror = () => {
-        cleanup();
-        reject(new Error("No se pudo leer el archivo de imagen."));
-      };
-      img.src = objectUrl;
+
+      readViaFileReader();
     });
   }
 

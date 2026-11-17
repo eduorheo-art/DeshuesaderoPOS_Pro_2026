@@ -356,7 +356,7 @@ class YonkeDB {
   }
 
   // --- PIEZAS FUERA DE INVENTARIO (Pieza no catalogada vendida al momento) ---
-  processGhostPartSale({ pieza, vehiculo_origen, monto, compatibilidad = "", observacion = "" }) {
+  processGhostPartSale({ pieza, vehiculo_origen, monto, compatibilidad = "", observacion = "", fotos = [] }) {
     const price = Number(monto);
     if (isNaN(price) || price <= 0) {
       throw new Error("El precio de la pieza fuera de inventario debe ser mayor a 0");
@@ -380,7 +380,7 @@ class YonkeDB {
       fecha_venta: dateFormatted,
       observacion: "[Pieza fuera de Inventario] " + (observacion || "Venta rápida no catalogada"),
       compatibilidad: compatibilidad || "",
-      fotos: [],
+      fotos: Array.isArray(fotos) ? fotos : (fotos ? [fotos] : []),
       ubicacion_patio: "Venta directa"
     };
 

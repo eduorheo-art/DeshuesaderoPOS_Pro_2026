@@ -201,7 +201,23 @@ class AIRegisterManager {
       if (statusBox) statusBox.classList.remove("hidden");
       for (let i = 0; i < files.length; i++) {
         if (statusText) statusText.textContent = `Comprimiendo imagen ${i + 1} de ${files.length}...`;
-        this.currentPhotos.push(await window.imagesManager.compressImage(files[i], 900, 0.75));
+        let compressed = null;
+        if (window.imagesManager && typeof window.imagesManager.compressImage === "function") {
+          try {
+            compressed = await window.imagesManager.compressImage(files[i], 900, 0.75);
+          } catch (compErr) {
+            console.warn("Fallo al comprimir con canvas, usando fallback:", compErr);
+          }
+        }
+        if (!compressed) {
+          compressed = await this.fallbackReadFile(files[i]);
+        }
+        if (compressed) {
+          this.currentPhotos.push(compressed);
+        }
+      }
+      if (this.currentPhotos.length === 0) {
+        throw new Error("No se pudo leer ninguna imagen seleccionada.");
       }
       this.currentPhoto = this.currentPhotos[0];
       const previewImg = document.getElementById("ai-reg-preview-img");
@@ -212,7 +228,18 @@ class AIRegisterManager {
     } catch (err) {
       console.error("Error al procesar foto:", err);
       alert("Error al cargar la imagen. Intenta de nuevo.");
+      const statusBox = document.getElementById("ai-reg-analysis-status");
+      if (statusBox) statusBox.classList.add("hidden");
     }
+  }
+
+  fallbackReadFile(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
   }
 
   async runAIAnalysis() {

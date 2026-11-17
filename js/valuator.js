@@ -151,15 +151,48 @@ class VehicleValuatorManager {
     if (files.length === 0) return;
 
     const statusText = document.getElementById("valuator-gallery-status");
-    const newPhotos = [];
+    const zones = ["frente", "costado_izq", "costado_der", "trasera", "interiores"];
     try {
+      let assignedCount = 0;
       for (let i = 0; i < files.length; i++) {
         if (statusText) statusText.textContent = `Procesando imagen ${i + 1} de ${files.length}...`;
-        newPhotos.push(await window.imagesManager.compressImage(files[i], 900, 0.75));
+        const compressed = (window.imagesManager && typeof window.imagesManager.compressImage === "function")
+          ? await window.imagesManager.compressImage(files[i], 900, 0.75)
+          : await this.fallbackCompress(files[i]);
+        if (!compressed) continue;
+
+        // Asignar a la primera ranura de inspección vacía
+        const emptyZone = zones.find(z => !this.photos[z]);
+        if (emptyZone) {
+          this.photos[emptyZone] = compressed;
+          assignedCount++;
+          const previewImg = document.getElementById(`val-photo-preview-${emptyZone}`);
+          const placeholder = document.getElementById(`val-photo-placeholder-${emptyZone}`);
+          const checkBadge = document.getElementById(`val-photo-badge-${emptyZone}`);
+          if (previewImg && placeholder) {
+            previewImg.src = compressed;
+            previewImg.classList.remove("hidden");
+            placeholder.classList.add("hidden");
+          }
+          if (checkBadge) checkBadge.classList.remove("hidden");
+        } else {
+          // Si las 5 zonas ya están cubiertas, almacenar como fotos adicionales de inspección
+          this.galleryPhotos.push(compressed);
+        }
       }
-      for (const photo of newPhotos) this.galleryPhotos.push(photo);
+
       this.resetVisualInspection();
-      if (statusText) statusText.textContent = `${this.galleryPhotos.length} imagen(es) adicional(es) listas para analizar`;
+
+      const aiBtn = document.getElementById("valuator-ai-scan-btn");
+      if (aiBtn) {
+        aiBtn.classList.remove("opacity-60");
+        aiBtn.classList.add("animate-pulse");
+      }
+
+      const totalPhotos = Object.values(this.photos).filter(Boolean).length + this.galleryPhotos.length;
+      if (statusText) {
+        statusText.textContent = `✓ ${totalPhotos} foto(s) listas para inspección`;
+      }
     } catch (err) {
       console.error("Error al cargar imágenes de galería para valuación:", err);
       if (statusText) statusText.textContent = "No se pudieron procesar las imágenes seleccionadas.";

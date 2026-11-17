@@ -76,6 +76,46 @@ alter table yonke_vehicles add column if not exists owner_id uuid default auth.u
 alter table yonke_sales add column if not exists owner_id uuid default auth.uid();
 alter table yonke_expenses add column if not exists owner_id uuid default auth.uid();
 
+-- Columnas de negocio para Patio Compartido (FaceCar & Autopartes El Meyuca)
+alter table yonke_parts add column if not exists negocio text;
+alter table yonke_vehicles add column if not exists negocio text;
+alter table yonke_sales add column if not exists negocio text;
+alter table yonke_sales add column if not exists vendedor_negocio text;
+
+-- =========================================================================
+-- TABLA DE PATIO COMPARTIDO (Alianza FaceCar y Autopartes El Meyuca)
+-- Las cuentas independientes futuras que NO estén en esta tabla tendrán
+-- aislamiento total y no podrán ver inventario de nadie más.
+-- =========================================================================
+create table if not exists yonke_shared_yard_members (
+  id uuid primary key default gen_random_uuid(),
+  yard_id text not null default 'patio_facecar_meyuca',
+  owner_id uuid not null,
+  business_name text not null, -- 'FaceCar' o 'Autopartes El Meyuca'
+  created_at timestamptz not null default now(),
+  unique (yard_id, owner_id)
+);
+
+alter table yonke_shared_yard_members enable row level security;
+create policy yonke_shared_yard_members_read on yonke_shared_yard_members
+  for select to authenticated
+  using (true);
+
+-- Función segura para verificar si dos cuentas son socias del mismo patio
+create or replace function are_yard_partners(user_a uuid, user_b uuid)
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists (
+    select 1
+    from yonke_shared_yard_members m1
+    join yonke_shared_yard_members m2 on m1.yard_id = m2.yard_id
+    where m1.owner_id = user_a and m2.owner_id = user_b
+  );
+$$;
+
 -- Existing rows remain private until the owner claims them with their Auth user UUID.
 -- Run once in Supabase SQL Editor after signup:
 -- update yonke_parts set owner_id = 'OWNER_AUTH_UUID' where owner_id is null;
@@ -120,18 +160,78 @@ begin
 end
 $$;
 
-create policy yonke_parts_owner_only on yonke_parts
+-- =========================================================================
+-- POLÍTICAS RLS PARA PATIO COMPARTIDO Y AISLAMIENTO DE NEGOCIOS INDEPENDIENTES
+-- =========================================================================
+
+-- 1. PIEZAS (INVENTARIO):
+-- Lectura compartida entre socios del patio (o solo dueño si es independiente)
+create policy yonke_parts_shared_yard_select on yonke_parts
+  for select to authenticated
+  using (
+    owner_id = (select auth.uid())
+    or are_yard_partners(owner_id, (select auth.uid()))
+  );
+
+-- Actualización (descuento de inventario en venta cruzada de patio)
+create policy yonke_parts_shared_yard_update on yonke_parts
+  for update to authenticated
+  using (
+    owner_id = (select auth.uid())
+    or are_yard_partners(owner_id, (select auth.uid()))
+  )
+  with check (
+    owner_id = (select auth.uid())
+    or are_yard_partners(owner_id, (select auth.uid()))
+  );
+
+-- Inserción y eliminación: solo el dueño de la cuenta
+create policy yonke_parts_owner_insert on yonke_parts
+  for insert to authenticated
+  with check (owner_id = (select auth.uid()));
+
+create policy yonke_parts_owner_delete on yonke_parts
+  for delete to authenticated
+  using (owner_id = (select auth.uid()));
+
+-- 2. VEHÍCULOS DONADORES:
+-- Lectura compartida entre socios del patio para consultar autos en patio
+create policy yonke_vehicles_shared_yard_select on yonke_vehicles
+  for select to authenticated
+  using (
+    owner_id = (select auth.uid())
+    or are_yard_partners(owner_id, (select auth.uid()))
+  );
+
+create policy yonke_vehicles_owner_modify on yonke_vehicles
   for all to authenticated
   using (owner_id = (select auth.uid()))
   with check (owner_id = (select auth.uid()));
-create policy yonke_vehicles_owner_only on yonke_vehicles
-  for all to authenticated
+
+-- 3. VENTAS (HISTORIAL Y FINANZAS) - 100% AISLADAS:
+-- La lectura es ESTRICTAMENTE solo del dueño de la venta (el dinero no se comparte ni se ve)
+create policy yonke_sales_owner_select on yonke_sales
+  for select to authenticated
+  using (owner_id = (select auth.uid()));
+
+-- La inserción permite registrar la venta a favor del socio en venta cruzada
+create policy yonke_sales_insert_policy on yonke_sales
+  for insert to authenticated
+  with check (
+    owner_id = (select auth.uid())
+    or are_yard_partners(owner_id, (select auth.uid()))
+  );
+
+create policy yonke_sales_owner_modify on yonke_sales
+  for update to authenticated
   using (owner_id = (select auth.uid()))
   with check (owner_id = (select auth.uid()));
-create policy yonke_sales_owner_only on yonke_sales
-  for all to authenticated
-  using (owner_id = (select auth.uid()))
-  with check (owner_id = (select auth.uid()));
+
+create policy yonke_sales_owner_delete on yonke_sales
+  for delete to authenticated
+  using (owner_id = (select auth.uid()));
+
+-- 4. GASTOS - 100% AISLADOS:
 create policy yonke_expenses_owner_only on yonke_expenses
   for all to authenticated
   using (owner_id = (select auth.uid()))

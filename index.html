@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.sheetjs.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https://lkivtjzcemvinymxrrvv.supabase.co wss://lkivtjzcemvinymxrrvv.supabase.co https://commons.wikimedia.org https://cdn.jsdelivr.net https://en.wikipedia.org https://generativelanguage.googleapis.com; form-action 'self'; upgrade-insecure-requests">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.sheetjs.com https://cdn.jsdelivr.net https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data: https:; connect-src 'self' https://lkivtjzcemvinymxrrvv.supabase.co wss://lkivtjzcemvinymxrrvv.supabase.co https://commons.wikimedia.org https://cdn.jsdelivr.net https://en.wikipedia.org https://generativelanguage.googleapis.com blob:; form-action 'self'; upgrade-insecure-requests">
   <title>YonkePOS Pro - Sistema TPV y Deshuesadero de Autopartes</title>
   <!-- Tailwind CSS Local + Fallbacks Robustos para Local/GitHub Pages -->
   <script src="vendor/tailwindcss.browser.v3.4.17.js"></script>
@@ -414,66 +414,115 @@
       font-size: 17px;
       font-weight: 800;
     }
+    html, body {
+      overflow-x: hidden !important;
+      max-width: 100vw;
+    }
     #mobile-bottom-nav { display: none !important; }
+    /* Botón hamburguesa: oculto en desktop, visible en mobile */
+    #mobile-menu-toggle-btn { display: none !important; }
     @media (max-width: 767px) {
+      #mobile-menu-toggle-btn { display: flex !important; }
       body > header#app-sidebar {
-        position: relative;
+        position: sticky;
+        top: 0;
         width: 100%;
         height: auto;
-        max-height: 48vh;
+        max-height: none;
         border-right: 0;
         border-bottom: 1px solid var(--app-border);
+        z-index: 50;
       }
       #app-sidebar > .sidebar-shell {
         min-height: 0;
-        padding: 12px;
-        gap: 12px;
+        padding: 10px 14px;
+        gap: 8px;
+        flex-direction: column;
       }
-      #nav-dropdown-wrapper { min-height: 0; }
+      .sidebar-identity {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      #nav-dropdown-wrapper {
+        width: 100%;
+        display: none !important;
+        flex-direction: column;
+        border-top: 1px solid var(--app-border);
+        padding-top: 10px;
+        margin-top: 4px;
+      }
+      #nav-dropdown-wrapper.mobile-open {
+        display: flex !important;
+      }
       #nav-dropdown-menu {
-        overflow-x: auto;
-        overscroll-behavior-x: contain;
+        display: flex !important;
+        flex-direction: column;
+        width: 100%;
+        overflow: visible;
       }
       .sidebar-links {
-        flex-direction: row;
-        align-items: flex-start;
-        overflow-x: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        width: 100%;
       }
       #nav-dropdown-menu [data-nav-view],
       #nav-dropdown-menu [data-nav-finance-menu] {
-        width: max-content;
-        min-width: 128px;
-        min-height: 40px;
-        white-space: nowrap;
+        width: 100%;
+        min-height: 42px;
+        white-space: normal;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        font-size: 13px;
       }
       #finance-subnav {
-        flex-direction: row;
-        overflow-x: auto;
-        margin: 4px 0;
-        padding: 0;
-        border: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin: 4px 0 6px 14px;
+        padding-left: 10px;
+        border-left: 2px solid var(--border-color);
+        width: calc(100% - 14px);
+      }
+      #finance-subnav.hidden {
+        display: none !important;
       }
       #finance-subnav [data-finance-subview] {
-        width: max-content;
-        white-space: nowrap;
+        width: 100%;
+        min-height: 38px;
+        white-space: normal;
+        padding: 8px 12px;
+        font-size: 12px;
       }
       .sidebar-footer {
-        flex-direction: row;
-        flex-wrap: wrap;
-        margin-top: 0;
-        padding-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 8px;
+        padding-top: 10px;
+        border-top: 1px solid var(--app-border);
+        width: 100%;
       }
-      .sidebar-footer .sidebar-footer-title { width: 100%; }
-      .sidebar-footer button { width: auto; min-height: 38px; }
+      .sidebar-footer button {
+        width: 100%;
+        min-height: 40px;
+        padding: 8px 12px;
+      }
       main#app-content {
         width: 100%;
-        min-height: 55vh;
+        max-width: 100vw;
+        min-height: 80vh;
         margin: 0;
-        padding: 16px 12px;
+        padding: 14px 10px;
+        overflow-x: hidden !important;
       }
       #pwa-install-banner, #pending-sale-banner { margin-left: 0; }
-      .vehicle-reference { min-width: 100%; }
-      .vehicle-reference-frame { width: 78px; height: 54px; flex-basis: 78px; }
+      .vehicle-reference { min-width: 0; max-width: 100%; }
+      .vehicle-reference-frame { width: 70px; height: 50px; flex-basis: 70px; flex-shrink: 0; }
     }
   </style>
 </head>
@@ -535,6 +584,10 @@
             <span id="yonke-sync-status-text">Sesión Supabase · datos locales por cuenta</span>
           </p>
         </div>
+        <button id="mobile-menu-toggle-btn" type="button" onclick="window.appManager?.toggleMobileMenu()" class="md:hidden ml-auto px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 border border-slate-700 cursor-pointer shadow">
+          <span id="mobile-menu-toggle-icon">☰</span>
+          <span id="mobile-menu-toggle-text">Menú</span>
+        </button>
       </div>
 
       <div id="nav-dropdown-wrapper">
@@ -548,7 +601,6 @@
             <div class="sidebar-links">
             <button 
               data-nav-view="sales" 
-              onclick="document.getElementById('nav-dropdown-menu').classList.add('hidden')"
               class="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 text-slate-200 hover:bg-slate-800 hover:text-white transition cursor-pointer"
             >
               <span class="text-base">🛒</span>
@@ -556,7 +608,6 @@
             </button>
             <button 
               data-nav-view="dashboard" 
-              onclick="document.getElementById('nav-dropdown-menu').classList.add('hidden')"
               class="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 text-slate-200 hover:bg-slate-800 hover:text-white transition cursor-pointer"
             >
               <span class="text-base">📊</span>
@@ -568,6 +619,7 @@
             >
               <span class="text-base">📦</span>
               <span>Finanzas</span>
+              <span class="ml-auto text-[10px] opacity-60" id="finance-menu-arrow">▸</span>
             </button>
             <div id="finance-subnav" class="hidden ml-5 border-l border-slate-700 pl-2 space-y-1">
               <button data-finance-subview="overview" class="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white">Información Financiera</button>
@@ -576,7 +628,6 @@
             </div>
             <button 
               data-nav-view="valuator" 
-              onclick="document.getElementById('nav-dropdown-menu').classList.add('hidden')"
               class="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 text-slate-200 hover:bg-slate-800 hover:text-white transition cursor-pointer"
             >
               <span class="text-base">🔍</span>
@@ -584,7 +635,6 @@
             </button>
             <button 
               data-nav-view="inventory" 
-              onclick="document.getElementById('nav-dropdown-menu').classList.add('hidden')"
               class="w-full text-left px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 text-slate-200 hover:bg-slate-800 hover:text-white transition cursor-pointer"
             >
               <span class="text-base">📋</span>
@@ -677,6 +727,44 @@
             <a id="sales-vehicle-image-source" class="hidden" target="_blank" rel="noopener noreferrer">Fuente: Wikimedia Commons</a>
           </div>
         </div>
+
+        <!-- Selector de Negocio en Patio Compartido (FaceCar & Autopartes El Meyuca) -->
+        <div id="sales-yard-business-selector" class="flex items-center gap-1 bg-slate-900 text-white p-1 rounded-xl border border-slate-800 shadow-sm" role="group" aria-label="Filtro de Patio Compartido">
+          <span class="text-[10px] font-black uppercase text-amber-400 px-2 flex items-center gap-1 select-none">
+            <span>Patio:</span>
+          </span>
+          <button 
+            type="button" 
+            id="yard-btn-all" 
+            data-yard-business="TODOS"
+            onclick="window.salesManager.setYardBusinessFilter('TODOS')" 
+            class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
+            title="Ver catálogo conjunto de todo el patio compartido"
+          >
+            Todo el Patio
+          </button>
+          <button 
+            type="button" 
+            id="yard-btn-facecar" 
+            data-yard-business="FaceCar"
+            onclick="window.salesManager.setYardBusinessFilter('FaceCar')" 
+            class="px-2.5 py-1 text-xs font-bold rounded-lg transition bg-blue-600 text-white shadow cursor-pointer"
+            title="Ver únicamente piezas y autos de FaceCar"
+          >
+            FaceCar
+          </button>
+          <button 
+            type="button" 
+            id="yard-btn-meyuca" 
+            data-yard-business="Autopartes El Meyuca"
+            onclick="window.salesManager.setYardBusinessFilter('Autopartes El Meyuca')" 
+            class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
+            title="Ver únicamente piezas y autos de Autopartes El Meyuca"
+          >
+            Autopartes El Meyuca
+          </button>
+        </div>
+
         <div class="flex flex-wrap items-center gap-2">
           <!-- Botón Pieza fuera de Inventario -->
           <button 
@@ -719,7 +807,16 @@
         </section>
 
         <section id="sales-vehicle-step" class="sales-step-panel hidden" aria-label="Vehículos disponibles">
-          <h3 class="sales-step-heading">Vehículos</h3>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="sales-step-heading m-0">Vehículos</h3>
+            <button 
+              type="button" 
+              onclick="window.salesManager?.backToBrands()" 
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-xs rounded-xl shadow-sm transition active:scale-95 cursor-pointer border border-slate-700"
+            >
+              <span>← Volver a Marcas</span>
+            </button>
+          </div>
           <div id="sales-vehicle-buttons" aria-label="Seleccionar vehículo"></div>
           <select id="sales-filter-vehiculo" disabled class="sales-filter-control" aria-hidden="true" tabindex="-1">
             <option value="">Seleccionar Vehículo...</option>
@@ -727,7 +824,16 @@
         </section>
 
         <section id="sales-pieces-step" class="sales-step-panel hidden" aria-label="Refacciones disponibles">
-          <h3 class="sales-step-heading">Refacciones disponibles</h3>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="sales-step-heading m-0">Refacciones disponibles</h3>
+            <button 
+              type="button" 
+              onclick="window.salesManager?.backToVehicles()" 
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-xs rounded-xl shadow-sm transition active:scale-95 cursor-pointer border border-slate-700"
+            >
+              <span>← Volver a Vehículos</span>
+            </button>
+          </div>
           <input
             id="sales-filter-pieza"
             type="text"
@@ -743,7 +849,7 @@
 
         <div class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
           <span id="sales-parts-count" class="font-bold text-slate-700">Selecciona una marca para ver los vehículos disponibles</span>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
             <span>Terminal TPV en tiempo real</span>
           </div>
@@ -761,7 +867,7 @@
             class="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
           >
             <span>⬅️</span>
-            <span>Cancelar y Volver al Catálogo</span>
+            <span>← Volver a Refacciones disponibles</span>
           </button>
           <span id="ml-detail-stock" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
             En existencia
@@ -1604,71 +1710,72 @@
         </div>
 
         <!-- 5 Ranuras Fotográficas (Frente, Costado Izq, Costado Der, Trasera, Interior) -->
-        <div class="flex flex-wrap items-center gap-2">
-          <label class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg cursor-pointer">
-            Seleccionar varias imágenes de galería
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <label class="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-lg cursor-pointer flex items-center gap-1.5 shadow-sm transition active:scale-95">
+            <span>📁</span>
+            <span>Cargar fotos desde Galería (1 o varias)</span>
             <input type="file" accept="image/*" multiple class="hidden" onchange="window.vehicleValuatorManager.handleGalleryPhotoUpload(event)"/>
           </label>
-          <span id="valuator-gallery-status" class="text-[11px] text-slate-500"></span>
+          <span id="valuator-gallery-status" class="text-[11px] text-slate-500 font-medium"></span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           
           <!-- Ranura 1: Frente y Motor -->
           <div class="relative group rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 p-2 text-center flex flex-col items-center justify-center min-h-[135px] transition cursor-pointer">
-            <input type="file" accept="image/*" capture="environment" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.vehicleValuatorManager.handlePhotoUpload('frente', event)"/>
+            <input type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.vehicleValuatorManager.handlePhotoUpload('frente', event)"/>
             <img id="val-photo-preview-frente" class="hidden w-full h-24 object-cover rounded-lg shadow-sm mb-1"/>
             <div id="val-photo-placeholder-frente" class="flex flex-col items-center text-slate-400">
               <span class="text-2xl mb-1">🚘</span>
               <span class="text-xs font-bold text-slate-700">1. Frente y Motor</span>
-              <span class="text-[10px] text-slate-400">+ Tomar foto</span>
+              <span class="text-[10px] text-slate-400">+ Foto o Galería</span>
             </div>
             <span id="val-photo-badge-frente" class="hidden absolute top-2 right-2 z-20 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center shadow">✓</span>
           </div>
 
           <!-- Ranura 2: Costado Izquierdo (Chofer) -->
           <div class="relative group rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 p-2 text-center flex flex-col items-center justify-center min-h-[135px] transition cursor-pointer">
-            <input type="file" accept="image/*" capture="environment" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.vehicleValuatorManager.handlePhotoUpload('costado_izq', event)"/>
+            <input type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.vehicleValuatorManager.handlePhotoUpload('costado_izq', event)"/>
             <img id="val-photo-preview-costado_izq" class="hidden w-full h-24 object-cover rounded-lg shadow-sm mb-1"/>
             <div id="val-photo-placeholder-costado_izq" class="flex flex-col items-center text-slate-400">
               <span class="text-2xl mb-1">⬅️</span>
               <span class="text-xs font-bold text-slate-700">2. Costado Izquierdo</span>
-              <span class="text-[10px] text-slate-400">+ Tomar foto</span>
+              <span class="text-[10px] text-slate-400">+ Foto o Galería</span>
             </div>
             <span id="val-photo-badge-costado_izq" class="hidden absolute top-2 right-2 z-20 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center shadow">✓</span>
           </div>
 
           <!-- Ranura 3: Costado Derecho (Copiloto) -->
           <div class="relative group rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 p-2 text-center flex flex-col items-center justify-center min-h-[135px] transition cursor-pointer">
-            <input type="file" accept="image/*" capture="environment" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.vehicleValuatorManager.handlePhotoUpload('costado_der', event)"/>
+            <input type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.vehicleValuatorManager.handlePhotoUpload('costado_der', event)"/>
             <img id="val-photo-preview-costado_der" class="hidden w-full h-24 object-cover rounded-lg shadow-sm mb-1"/>
             <div id="val-photo-placeholder-costado_der" class="flex flex-col items-center text-slate-400">
               <span class="text-2xl mb-1">➡️</span>
               <span class="text-xs font-bold text-slate-700">3. Costado Derecho</span>
-              <span class="text-[10px] text-slate-400">+ Tomar foto</span>
+              <span class="text-[10px] text-slate-400">+ Foto o Galería</span>
             </div>
             <span id="val-photo-badge-costado_der" class="hidden absolute top-2 right-2 z-20 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center shadow">✓</span>
           </div>
 
           <!-- Ranura 4: Trasera y Cajuela -->
           <div class="relative group rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 p-2 text-center flex flex-col items-center justify-center min-h-[135px] transition cursor-pointer">
-            <input type="file" accept="image/*" capture="environment" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.vehicleValuatorManager.handlePhotoUpload('trasera', event)"/>
+            <input type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.vehicleValuatorManager.handlePhotoUpload('trasera', event)"/>
             <img id="val-photo-preview-trasera" class="hidden w-full h-24 object-cover rounded-lg shadow-sm mb-1"/>
             <div id="val-photo-placeholder-trasera" class="flex flex-col items-center text-slate-400">
               <span class="text-2xl mb-1">🔙</span>
               <span class="text-xs font-bold text-slate-700">4. Trasera</span>
-              <span class="text-[10px] text-slate-400">+ Tomar foto</span>
+              <span class="text-[10px] text-slate-400">+ Foto o Galería</span>
             </div>
             <span id="val-photo-badge-trasera" class="hidden absolute top-2 right-2 z-20 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center shadow">✓</span>
           </div>
 
           <!-- Ranura 5: Interiores y Tablero -->
           <div class="relative group rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 p-2 text-center flex flex-col items-center justify-center min-h-[135px] transition cursor-pointer">
-            <input type="file" accept="image/*" capture="environment" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.vehicleValuatorManager.handlePhotoUpload('interiores', event)"/>
+            <input type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10" onchange="window.vehicleValuatorManager.handlePhotoUpload('interiores', event)"/>
             <img id="val-photo-preview-interiores" class="hidden w-full h-24 object-cover rounded-lg shadow-sm mb-1"/>
             <div id="val-photo-placeholder-interiores" class="flex flex-col items-center text-slate-400">
               <span class="text-2xl mb-1">💺</span>
               <span class="text-xs font-bold text-slate-700">5. Interiores</span>
-              <span class="text-[10px] text-slate-400">+ Tomar foto</span>
+              <span class="text-[10px] text-slate-400">+ Foto o Galería</span>
             </div>
             <span id="val-photo-badge-interiores" class="hidden absolute top-2 right-2 z-20 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center shadow">✓</span>
           </div>
@@ -1786,12 +1893,48 @@
 
     <!-- ================= 5. VISTA: INVENTARIO GENERAL ================= -->
     <section id="view-inventory" class="hidden space-y-4">
-      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="text-lg font-black text-slate-900">Catálogo Maestro de Autopartes</h2>
           <p id="full-inventory-count" class="text-xs text-slate-500">Seleccione marca y vehículo para mostrar inventario</p>
         </div>
-        <div class="flex items-center gap-2">
+
+        <!-- Filtro de Negocio en Inventario General (Patio Compartido) -->
+        <div id="inventory-yard-business-selector" class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200" role="group" aria-label="Filtro de Patio Compartido en Inventario">
+          <span class="text-[10px] font-black uppercase text-slate-500 px-2 select-none">Patio:</span>
+          <button 
+            type="button" 
+            id="inv-yard-btn-all" 
+            data-inv-yard="TODOS"
+            onclick="window.appManager.setInventoryYardFilter('TODOS')" 
+            class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 hover:bg-white cursor-pointer"
+            title="Ver catálogo completo del patio compartido"
+          >
+            Todo el Patio
+          </button>
+          <button 
+            type="button" 
+            id="inv-yard-btn-facecar" 
+            data-inv-yard="FaceCar"
+            onclick="window.appManager.setInventoryYardFilter('FaceCar')" 
+            class="px-2.5 py-1 text-xs font-bold rounded-lg transition bg-blue-600 text-white shadow cursor-pointer"
+            title="Ver únicamente inventario de FaceCar"
+          >
+            FaceCar
+          </button>
+          <button 
+            type="button" 
+            id="inv-yard-btn-meyuca" 
+            data-inv-yard="Autopartes El Meyuca"
+            onclick="window.appManager.setInventoryYardFilter('Autopartes El Meyuca')" 
+            class="px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 hover:bg-white cursor-pointer"
+            title="Ver únicamente inventario de Autopartes El Meyuca"
+          >
+            Autopartes El Meyuca
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
           <button 
             id="edit-selected-row-btn"
             onclick="window.appManager.openEditModalForSelected()"
@@ -1864,6 +2007,7 @@
             <thead class="bg-slate-50 sticky top-0 z-10 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
               <tr>
                 <th class="py-2.5 px-3">Código</th>
+                <th class="py-2.5 px-3">Negocio</th>
                 <th class="py-2.5 px-3">Pieza</th>
                 <th class="py-2.5 px-3">Vehículo Origen</th>
                 <th class="py-2.5 px-3">Año</th>
@@ -2166,6 +2310,13 @@
             <p class="text-[10px] text-slate-500 mt-1">Captura el costo real por unidad; no se distribuye automáticamente el costo del vehículo.</p>
           </div>
           <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Negocio (Patio)</label>
+            <select id="edit-field-negocio" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-amber-500 outline-none">
+              <option value="FaceCar">FaceCar</option>
+              <option value="Autopartes El Meyuca">Autopartes El Meyuca</option>
+            </select>
+          </div>
+          <div>
             <label class="block text-xs font-bold text-slate-700 mb-1">Fecha de Venta</label>
             <input type="date" id="edit-field-fecha-venta" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 outline-none" />
           </div>
@@ -2197,9 +2348,43 @@
         <button onclick="window.ghostPartsManager.closeModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
       </div>
       
-      <p class="text-xs text-slate-500 mb-4">
+      <p class="text-xs text-slate-500 mb-3">
         Esta pieza se cobrará de inmediato, se agregará a tu inventario como <strong>VENDIDA</strong> vinculada al vehículo y se dividirá 80% Caja A y 20% Caja B.
       </p>
+
+      <!-- Sección de Identificación con IA y Fotografía (Cámara / Galería) -->
+      <div class="mb-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-xs font-black text-slate-800 flex items-center gap-1.5">
+            <span>📸</span>
+            <span>Identificar pieza con IA (Manuales OEM)</span>
+          </label>
+          <span id="ghost-ai-status-badge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ Identificada</span>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-2">
+          <label class="py-2 px-3 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 flex items-center justify-center gap-1.5 cursor-pointer text-xs font-bold transition active:scale-95 shadow-sm text-center">
+            <span>📷</span>
+            <span>Tomar Foto</span>
+            <input type="file" id="ghost-photo-camera" accept="image/*" capture="environment" class="hidden" onchange="window.ghostPartsManager.handlePhotoInput(event)"/>
+          </label>
+          <label class="py-2 px-3 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 flex items-center justify-center gap-1.5 cursor-pointer text-xs font-bold transition active:scale-95 shadow-sm text-center">
+            <span>📁</span>
+            <span>Subir de Galería</span>
+            <input type="file" id="ghost-photo-gallery" accept="image/*" class="hidden" onchange="window.ghostPartsManager.handlePhotoInput(event)"/>
+          </label>
+        </div>
+
+        <!-- Preview y Estado de IA -->
+        <div id="ghost-photo-preview-container" class="hidden mt-2.5 flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-200 shadow-sm">
+          <img id="ghost-photo-preview-img" class="w-14 h-14 object-cover rounded-md border border-slate-200 shadow-sm" alt="Preview"/>
+          <div class="flex-1 min-w-0">
+            <p id="ghost-ai-status-text" class="text-xs font-bold text-slate-800 truncate">Analizando imagen con IA...</p>
+            <p id="ghost-ai-source-text" class="text-[10px] text-slate-500 truncate">Consultando manuales oficiales del fabricante...</p>
+          </div>
+          <button type="button" onclick="window.ghostPartsManager.removePhoto()" class="text-slate-400 hover:text-rose-600 text-xs font-bold px-1.5 py-1" title="Quitar foto">✕</button>
+        </div>
+      </div>
 
       <form id="ghost-part-form" class="space-y-3">
         <div>
@@ -2247,11 +2432,21 @@
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Compatibilidad / Notas (Opcional)</label>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Compatibilidad (según Manuales OEM)</label>
           <input 
             type="text" 
             id="ghost-part-compat" 
-            placeholder="ej: Compatible con Sentra..." 
+            placeholder="ej: Compatible con Sentra según catálogo oficial..." 
+            class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Observación técnica / Fuente OEM (Opcional)</label>
+          <input 
+            type="text" 
+            id="ghost-part-notes" 
+            placeholder="ej: Manual de Taller Nissan QR25DE / Conector 6 pines" 
             class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
@@ -2716,7 +2911,7 @@
             >
               ‹ Elegir otra venta
             </button>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <button 
                 type="button" 
                 onclick="window.returnsManager.closeModal()"
@@ -3177,8 +3372,13 @@ class YonkeDB {
                 throw new Error("Supabase devolvió una respuesta de datos inválida.");
               }
 
-              this.parts = partsRes.data.map(p => ({
-                  owner_id: this.ownerId,
+              const myBiz = this.getCurrentBusiness();
+              this.parts = partsRes.data.map(p => {
+                const partOwner = p.owner_id || this.ownerId;
+                const partBiz = p.negocio || (partOwner === this.ownerId ? myBiz : (myBiz === "FaceCar" ? "Autopartes El Meyuca" : "FaceCar"));
+                return {
+                  owner_id: partOwner,
+                  negocio: partBiz,
                   id: p.id,
                   vehiculo_origen: p.vehiculo_origen || p["MODELO"] || "Sin vehículo",
                   anio: p.anio || p["AÑO"] || "",
@@ -3194,47 +3394,121 @@ class YonkeDB {
                   compatibilidad: p.compatibilidad || p["COMPATIBILIDAD (OTROS)"] || "",
                   demanda: p.demanda || p["DEMANDA"] || "",
                   busquedas_info: p.busquedas_info || p["BUSQUEDAS_INFO"] || "",
-                  fotos: Array.isArray(p.fotos) ? p.fotos : []
-                }));
+                  fotos: Array.isArray(p.fotos) ? p.fotos : [],
+                  updated_at: p.updated_at || null
+                };
+              });
 
-                this.vehicles = vehiclesRes.data.map(row => ({ ...row, owner_id: this.ownerId }));
-                this.sales = salesRes.data.map(row => ({ ...row, owner_id: this.ownerId }));
-                this.expenses = expensesRes.data.map(row => ({ ...row, owner_id: this.ownerId }));
-                
-                cloudLoaded = true;
-                this.persist();
-                console.log(`✅ Inventario cargado y mapeado desde Supabase (${this.parts.length} piezas).`);
-            } catch (cloudErr) {
-              console.error("No se pudieron cargar los datos de Supabase:", cloudErr);
-              const status = document.getElementById("yonke-sync-status-text");
-              if (status) status.textContent = `Error cargando datos de Supabase: ${cloudErr.message || "revisa la autenticación y RLS"}`;
-            }
-          }
+              let localParts = [];
+              try {
+                const rawParts = localStorage.getItem(this.storageKeys.parts);
+                const parsedParts = rawParts ? JSON.parse(rawParts) : [];
+                if (Array.isArray(parsedParts)) localParts = parsedParts;
+              } catch (cacheErr) {
+                console.warn("Caché local de piezas ilegible:", cacheErr);
+              }
+              const localById = new Map(localParts.map(item => [String(item.id), item]));
+              const pendingCloud = [];
+              this.parts = this.parts.map(part => {
+                const local = localById.get(String(part.id));
+                const localTime = Date.parse(local?.updated_at || 0) || 0;
+                const cloudTime = Date.parse(part.updated_at || 0) || 0;
+                if (!local || localTime <= cloudTime) return part;
+                const merged = {
+                  ...part,
+                  precio_base: local.precio_base,
+                  precio_minimo: local.precio_minimo,
+                  compatibilidad: local.compatibilidad || "",
+                  demanda: local.demanda || "",
+                  busquedas_info: local.busquedas_info || "",
+                  updated_at: local.updated_at
+                };
+                pendingCloud.push(merged);
+                return merged;
+              });
+              pendingCloud.forEach(part => {
+                this.savePartToCloud(part).catch(err => console.warn("Reenvío de pieza pendiente:", err));
+              });
 
-          if (!cloudLoaded) {
-            const readCache = key => {
-              const value = localStorage.getItem(key);
-              if (!value) return [];
-              const records = JSON.parse(value);
-              if (!Array.isArray(records)) throw new Error(`Caché local inválida: ${key}`);
-              return records.map(record => ({ ...record, owner_id: this.ownerId }));
-            };
-            this.parts = readCache(this.storageKeys.parts);
-            this.vehicles = readCache(this.storageKeys.vehicles);
-            this.sales = readCache(this.storageKeys.sales);
-            this.expenses = readCache(this.storageKeys.expenses);
-            this.persist();
+              this.vehicles = vehiclesRes.data.map(row => {
+                const vehOwner = row.owner_id || this.ownerId;
+                const vehBiz = row.negocio || (vehOwner === this.ownerId ? myBiz : (myBiz === "FaceCar" ? "Autopartes El Meyuca" : "FaceCar"));
+                return {
+                  ...row,
+                  owner_id: vehOwner,
+                  negocio: vehBiz
+                };
+              });
+
+              // Las ventas y gastos cargados son EXCLUSIVAMENTE los de esta cuenta (RLS en Supabase solo devuelve los propios)
+              this.sales = salesRes.data.map(row => ({ ...row, owner_id: this.ownerId, negocio: myBiz }));
+              this.expenses = expensesRes.data.map(row => ({ ...row, owner_id: this.ownerId, negocio: myBiz }));
+              
+              cloudLoaded = true;
+              this.persist();
+              console.log(`✅ Inventario cargado y mapeado desde Supabase (${this.parts.length} piezas).`);
+          } catch (cloudErr) {
+            console.error("No se pudieron cargar los datos de Supabase:", cloudErr);
+            const status = document.getElementById("yonke-sync-status-text");
+            if (status) status.textContent = `Error cargando datos de Supabase: ${cloudErr.message || "revisa la autenticación y RLS"}`;
           }
+        }
+
+        if (!cloudLoaded) {
+          const myBiz = this.getCurrentBusiness();
+          const readCache = key => {
+            const value = localStorage.getItem(key);
+            if (!value) return [];
+            const records = JSON.parse(value);
+            if (!Array.isArray(records)) throw new Error(`Caché local inválida: ${key}`);
+            return records.map(record => ({
+              ...record,
+              owner_id: record.owner_id || this.ownerId,
+              negocio: record.negocio || (record.owner_id === this.ownerId ? myBiz : (myBiz === "FaceCar" ? "Autopartes El Meyuca" : "FaceCar"))
+            }));
+          };
+          this.parts = readCache(this.storageKeys.parts);
+          this.vehicles = readCache(this.storageKeys.vehicles);
+          this.sales = readCache(this.storageKeys.sales);
+          this.expenses = readCache(this.storageKeys.expenses);
+          this.persist();
+        }
         } catch (err) {
           console.error("Error en init:", err);
         }
       }
 
+  getCurrentBusiness() {
+    const companyEl = document.getElementById("yonke-company-name");
+    const nameFromDom = companyEl ? companyEl.textContent.trim() : "";
+    if (nameFromDom && nameFromDom !== "Mi empresa" && nameFromDom !== "") {
+      if (/meyuca/i.test(nameFromDom)) return "Autopartes El Meyuca";
+      if (/facecar/i.test(nameFromDom)) return "FaceCar";
+      return nameFromDom;
+    }
+    const metaCompany = window.yonkeSupabaseClient?.auth?.user?.()?.user_metadata?.company_name
+      || window.appManager?.currentUser?.user_metadata?.company_name;
+    if (metaCompany) {
+      if (/meyuca/i.test(metaCompany)) return "Autopartes El Meyuca";
+      if (/facecar/i.test(metaCompany)) return "FaceCar";
+      return metaCompany;
+    }
+    return "FaceCar";
+  }
+
+  getPartnerBusiness() {
+    return this.getCurrentBusiness() === "Autopartes El Meyuca" ? "FaceCar" : "Autopartes El Meyuca";
+  }
+
   persist() {
     try {
       if (!this.storageKeys || !this.ownerId) return;
+      const myBiz = this.getCurrentBusiness();
       [this.parts, this.vehicles, this.sales, this.expenses].forEach(records => {
-        records.forEach(record => { record.owner_id = this.ownerId; });
+        records.forEach(record => {
+          if (!record.owner_id) record.owner_id = this.ownerId;
+          if (!record.negocio) record.negocio = (record.owner_id === this.ownerId ? myBiz : (myBiz === "FaceCar" ? "Autopartes El Meyuca" : "FaceCar"));
+        });
       });
       localStorage.setItem(this.storageKeys.parts, JSON.stringify(this.parts));
       localStorage.setItem(this.storageKeys.vehicles, JSON.stringify(this.vehicles));
@@ -3255,8 +3529,11 @@ class YonkeDB {
   }
 
   addVehicle(vehicleData) {
+    const currentBiz = this.getCurrentBusiness();
     const newVehicle = {
       id: "veh-" + Date.now(),
+      owner_id: this.ownerId,
+      negocio: vehicleData.negocio || currentBiz,
       modelo: vehicleData.modelo,
       anio: vehicleData.anio || "",
       costo: Number(vehicleData.costo) || 0,
@@ -3268,6 +3545,9 @@ class YonkeDB {
     };
     this.vehicles.unshift(newVehicle);
     this.persist();
+    if (window.yonkeSupabaseClient && navigator.onLine) {
+      window.yonkeSupabaseClient.from("yonke_vehicles").insert([newVehicle]).then().catch(e => console.warn("Sync insert vehicle:", e));
+    }
     return newVehicle;
   }
 
@@ -3278,6 +3558,34 @@ class YonkeDB {
 
   getPartById(id) {
     return this.parts.find(p => String(p.id) === String(id));
+  }
+
+  async savePartToCloud(part) {
+    const client = window.yonkeSupabaseClient;
+    if (!client) throw new Error("Supabase no está disponible.");
+    if (!navigator.onLine) throw new Error("Sin conexión: Supabase no confirmó el guardado.");
+    const payload = {
+      "PRECIO (BASE)": part.precio_base,
+      "PRECIO (MINIMO)": part.precio_minimo,
+      "COMPATIBILIDAD (OTROS)": part.compatibilidad || "",
+      "DEMANDA": part.demanda || "",
+      "CANTIDAD": part.cantidad,
+      "ESTADO": part.estado,
+      "VENTA FINAL": part.venta_final,
+      "FECHA DE VENTA": part.fecha_venta,
+      "OBSERVACION": part.observacion || "",
+      updated_at: part.updated_at,
+      busquedas_info: part.busquedas_info || ""
+    };
+    let { data, error } = await client.from("yonke_parts").update(payload).eq("id", part.id).select("id");
+    if (error && /busquedas_info/i.test(error.message || "")) {
+      delete payload.busquedas_info;
+      ({ data, error } = await client.from("yonke_parts").update(payload).eq("id", part.id).select("id"));
+    }
+    if (error) throw error;
+    if (!data || !data.length) {
+      throw new Error("Supabase no confirmó el guardado de " + (part.pieza || part.id));
+    }
   }
 
   updatePart(id, updatedFields) {
@@ -3298,16 +3606,22 @@ class YonkeDB {
       part.estado = "En existencia";
     }
 
+    part.updated_at = new Date().toISOString();
+    part.dispositivo_origen = (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) || window.innerWidth < 1024 ? "Móvil" : "PC";
     this.parts[index] = part;
     this.persist();
+    part._cloudSave = this.savePartToCloud(part);
     return part;
   }
 
   addPart(partData) {
     const qty = Number(partData.cantidad) >= 0 ? Number(partData.cantidad) : 1;
     const estado = partData.estado || (qty === 0 ? "VENDIDO" : "En existencia");
+    const currentBiz = this.getCurrentBusiness();
     const newPart = {
       id: partData.id || "P-" + Date.now(),
+      owner_id: partData.owner_id || this.ownerId,
+      negocio: partData.negocio || currentBiz,
       vehiculo_origen: partData.vehiculo_origen || "Sin vehículo",
       anio: partData.anio || "",
       pieza: partData.pieza || "Pieza sin nombre",
@@ -3328,11 +3642,14 @@ class YonkeDB {
 
     this.parts.unshift(newPart);
     this.persist();
+    if (window.yonkeSupabaseClient && navigator.onLine) {
+      window.yonkeSupabaseClient.from("yonke_parts").insert([newPart]).then().catch(e => console.warn("Sync insert part:", e));
+    }
     return newPart;
   }
 
-  // --- REGISTRO DE VENTA AUTOMATIZADO ---
-  processSale({ partId, finalPrice, saleDate, note = "" }) {
+  // --- REGISTRO DE VENTA AUTOMATIZADO CON AISLAMIENTO DE PATIO COMPARTIDO ---
+  async processSale({ partId, finalPrice, saleDate, note = "" }) {
     const part = this.getPartById(partId);
     if (!part) {
       throw new Error("Pieza no encontrada en inventario");
@@ -3347,7 +3664,12 @@ class YonkeDB {
     const dateFormatted = saleDate || now.toISOString().split("T")[0];
     const timeFormatted = now.toTimeString().split(" ")[0];
 
-    // 1. Actualizar la pieza en inventario
+    const currentBiz = this.getCurrentBusiness();
+    const partOwner = part.owner_id || this.ownerId;
+    const partBiz = part.negocio || (partOwner === this.ownerId ? currentBiz : (currentBiz === "FaceCar" ? "Autopartes El Meyuca" : "FaceCar"));
+    const isCrossSale = Boolean(currentBiz && partBiz && currentBiz !== partBiz);
+
+    // 1. Actualizar la pieza en inventario (SIEMPRE se descuenta el inventario)
     const newQty = Math.max(0, (Number(part.cantidad) || 1) - 1);
     const updatedState = newQty === 0 ? "VENDIDO" : "En existencia";
 
@@ -3355,7 +3677,13 @@ class YonkeDB {
     part.estado = updatedState;
     part.venta_final = price;
     part.fecha_venta = dateFormatted;
-    if (note) {
+
+    let saleNote = note;
+    if (isCrossSale) {
+      const crossTag = `[Venta Cruzada Patio: Cobrada por ${currentBiz} a favor de ${partBiz}]`;
+      part.observacion = (part.observacion ? part.observacion + " | " : "") + crossTag;
+      saleNote = (saleNote ? saleNote + " | " : "") + crossTag;
+    } else if (note) {
       part.observacion = (part.observacion ? part.observacion + " | " : "") + note;
     }
 
@@ -3363,7 +3691,7 @@ class YonkeDB {
     const cajaA = Number((price * 0.80).toFixed(2));
     const cajaB = Number((price * 0.20).toFixed(2));
 
-    // 3. Registrar en historial de ventas
+    // 3. Registrar venta
     const saleRecord = {
       id: "sale-" + Date.now(),
       pieza_id: part.id,
@@ -3377,21 +3705,64 @@ class YonkeDB {
       caja_b: cajaB,
       fecha: dateFormatted,
       hora: timeFormatted,
-      tipo: "mostrador",
-      notas: note
+      tipo: isCrossSale ? "mostrador_cruzada" : "mostrador",
+      notas: saleNote,
+      owner_id: partOwner,
+      negocio: partBiz,
+      vendedor_negocio: currentBiz
     };
 
-    this.sales.unshift(saleRecord);
+    // 4. AISLAMIENTO FINANCIERO TOTAL:
+    // Si la pieza es de mi negocio: entra a mis ventas locales y a mis cajas.
+    // Si es VENTA CRUZADA (pieza del papá/socio):
+    // EL DINERO Y LA VENTA PERTENECEN A ÉL. NO ENTRA A this.sales DE MI CUENTA.
+    if (!isCrossSale) {
+      this.sales.unshift(saleRecord);
+    } else {
+      try {
+        const partnerSalesKey = `${STORAGE_KEY_SALES}:${partOwner}`;
+        const partnerSales = JSON.parse(localStorage.getItem(partnerSalesKey) || "[]");
+        partnerSales.unshift(saleRecord);
+        localStorage.setItem(partnerSalesKey, JSON.stringify(partnerSales));
+      } catch (e) {
+        console.warn("No se pudo cachear venta cruzada en partner key:", e);
+      }
+    }
+
+    await this.savePartToCloud(part);
+    const salePayload = {
+      id: saleRecord.id,
+      pieza_id: saleRecord.pieza_id,
+      pieza_nombre: saleRecord.pieza_nombre,
+      vehiculo_origen: saleRecord.vehiculo_origen,
+      precio_base: saleRecord.precio_base,
+      precio_minimo: saleRecord.precio_minimo,
+      monto_cobrado: saleRecord.monto_cobrado,
+      caja_a: saleRecord.caja_a,
+      caja_b: saleRecord.caja_b,
+      fecha: saleRecord.fecha,
+      hora: saleRecord.hora,
+      tipo: saleRecord.tipo,
+      notas: saleRecord.notas,
+      owner_id: saleRecord.owner_id,
+      updated_at: new Date().toISOString()
+    };
+    const { error: saleError } = await window.yonkeSupabaseClient.from("yonke_sales").insert([salePayload]);
+    if (saleError) throw saleError;
+
     this.persist();
 
     return {
       part,
-      sale: saleRecord
+      sale: saleRecord,
+      isCrossSale,
+      ownerBusiness: partBiz,
+      sellerBusiness: currentBiz
     };
   }
 
   // --- PIEZAS FUERA DE INVENTARIO (Pieza no catalogada vendida al momento) ---
-  processGhostPartSale({ pieza, vehiculo_origen, monto, compatibilidad = "", observacion = "" }) {
+  processGhostPartSale({ pieza, vehiculo_origen, monto, compatibilidad = "", observacion = "", fotos = [] }) {
     const price = Number(monto);
     if (isNaN(price) || price <= 0) {
       throw new Error("El precio de la pieza fuera de inventario debe ser mayor a 0");
@@ -3400,10 +3771,13 @@ class YonkeDB {
     const now = new Date();
     const dateFormatted = now.toISOString().split("T")[0];
     const timeFormatted = now.toTimeString().split(" ")[0];
+    const currentBiz = this.getCurrentBusiness();
 
     // 1. Se crea la pieza y se agrega al inventario como VENDIDA
     const newPart = {
       id: "P-FUERA-INV-" + Date.now(),
+      owner_id: this.ownerId,
+      negocio: currentBiz,
       vehiculo_origen: vehiculo_origen || "Desconocido / Suelto",
       anio: "",
       pieza: pieza || "Pieza especial",
@@ -3415,7 +3789,7 @@ class YonkeDB {
       fecha_venta: dateFormatted,
       observacion: "[Pieza fuera de Inventario] " + (observacion || "Venta rápida no catalogada"),
       compatibilidad: compatibilidad || "",
-      fotos: [],
+      fotos: Array.isArray(fotos) ? fotos : (fotos ? [fotos] : []),
       ubicacion_patio: "Venta directa"
     };
 
@@ -3438,11 +3812,19 @@ class YonkeDB {
       fecha: dateFormatted,
       hora: timeFormatted,
       tipo: "fuera_de_inventario",
-      notas: observacion
+      notas: observacion,
+      owner_id: this.ownerId,
+      negocio: currentBiz,
+      vendedor_negocio: currentBiz
     };
 
     this.sales.unshift(saleRecord);
     this.persist();
+
+    if (window.yonkeSupabaseClient && navigator.onLine) {
+      window.yonkeSupabaseClient.from("yonke_parts").insert([newPart]).then().catch(e => console.warn("Sync insert ghost part:", e));
+      window.yonkeSupabaseClient.from("yonke_sales").insert([saleRecord]).then().catch(e => console.warn("Sync insert ghost sale:", e));
+    }
 
     return {
       part: newPart,
@@ -3813,13 +4195,41 @@ class SalesManager {
     this.activePhotoIndex = 0;
     this.photoZoomLevel = 1;
     this.pendingLowPriceSale = null;
+    this.selectedYardBusiness = "FaceCar";
+    this.currentSalesStep = "brands";
   }
 
   init() {
+    const curBiz = window.yonkeDB ? window.yonkeDB.getCurrentBusiness() : "FaceCar";
+    this.selectedYardBusiness = curBiz;
+    this.updateYardFilterButtonsUI();
     this.populateMarcaDropdown();
     this.attachEventListeners();
     this.checkPendingDraft();
     this.setupUnloadProtection();
+    this.setSalesStep("brands");
+  }
+
+  setYardBusinessFilter(business) {
+    this.selectedYardBusiness = business || "TODOS";
+    this.updateYardFilterButtonsUI();
+    this.selectedMarca = "";
+    this.selectedVehiculo = "";
+    this.selectedPartId = null;
+    this.currentSalesStep = "brands";
+    this.populateMarcaDropdown();
+    this.setSalesStep("brands");
+    if (window.appManager) window.appManager.renderSalesSelectionButtons();
+  }
+
+  updateYardFilterButtonsUI() {
+    const buttons = document.querySelectorAll("#sales-yard-business-selector button[data-yard-business]");
+    buttons.forEach(btn => {
+      const isTarget = btn.dataset.yardBusiness === this.selectedYardBusiness;
+      btn.className = isTarget
+        ? "px-2.5 py-1 text-xs font-bold rounded-lg transition bg-blue-600 text-white shadow cursor-pointer"
+        : "px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer";
+    });
   }
 
   getDraftStorageKey() {
@@ -4081,8 +4491,16 @@ class SalesManager {
 
   // --- EXTRACCIÓN INTELIGENTE DE MARCAS DESDE INVENTARIO Y PATIO ---
   getAvailableBrands() {
-    const parts = window.yonkeDB ? window.yonkeDB.getParts() : [];
-    const vehicles = window.yonkeDB ? window.yonkeDB.getVehicles() : [];
+    let parts = window.yonkeDB ? window.yonkeDB.getParts() : [];
+    let vehicles = window.yonkeDB ? window.yonkeDB.getVehicles() : [];
+
+    // Filtro por negocio en patio compartido si no es "TODOS"
+    if (this.selectedYardBusiness && this.selectedYardBusiness !== "TODOS") {
+      const targetBiz = this.selectedYardBusiness;
+      parts = parts.filter(p => (p.negocio || "FaceCar") === targetBiz);
+      vehicles = vehicles.filter(v => (v.negocio || "FaceCar") === targetBiz);
+    }
+
     const knownBrands = [
       "Ford", "Chevrolet", "Chevy", "Nissan", "Toyota", "Honda", "Dodge", 
       "Chrysler", "Jeep", "GMC", "Volkswagen", "VW", "Mazda", "Hyundai", 
@@ -4146,7 +4564,8 @@ class SalesManager {
 
     this.populateVehiculoDropdown(marca);
     this.resetPiezaDropdown();
-    this.hideDetailView();
+    this.setSalesStep(marca ? "vehicles" : "brands");
+    window.appManager?.renderSalesSelectionButtons();
   }
 
   populateVehiculoDropdown(marca) {
@@ -4158,7 +4577,10 @@ class SalesManager {
       return;
     }
 
-    const parts = window.yonkeDB ? window.yonkeDB.getParts() : [];
+    let parts = window.yonkeDB ? window.yonkeDB.getParts() : [];
+    if (this.selectedYardBusiness && this.selectedYardBusiness !== "TODOS") {
+      parts = parts.filter(p => (p.negocio || "FaceCar") === this.selectedYardBusiness);
+    }
     const vehiclesSet = new Set();
 
     parts.forEach(p => {
@@ -4194,7 +4616,8 @@ class SalesManager {
     this.selectedPartId = null;
 
     this.populatePiezaDropdown(this.selectedMarca, vehiculo);
-    this.hideDetailView();
+    this.setSalesStep(vehiculo ? "pieces" : (this.selectedMarca ? "vehicles" : "brands"));
+    window.appManager?.renderSalesSelectionButtons();
   }
 
   populatePiezaDropdown(marca, vehiculo) {
@@ -4207,7 +4630,10 @@ class SalesManager {
       return;
     }
 
-    const parts = window.yonkeDB ? window.yonkeDB.getParts() : [];
+    let parts = window.yonkeDB ? window.yonkeDB.getParts() : [];
+    if (this.selectedYardBusiness && this.selectedYardBusiness !== "TODOS") {
+      parts = parts.filter(p => (p.negocio || "FaceCar") === this.selectedYardBusiness);
+    }
     // Filtrar piezas estrictamente de ese vehículo y marca
     const matchingParts = parts.filter(p => {
       const matchVehiculo = (p.vehiculo_origen || "").toLowerCase() === vehiculo.toLowerCase();
@@ -4260,12 +4686,7 @@ class SalesManager {
     const part = window.yonkeDB.getPartById(partId);
     if (!part) return;
 
-    const detailView = document.getElementById("sales-product-detail-view");
-    const container = document.getElementById("sales-parts-container");
-    if (!detailView) return;
-
-    if (container) container.classList.add("hidden");
-    detailView.classList.remove("hidden");
+    this.setSalesStep("detail");
 
     this.activePhotoIndex = 0;
     const photos = Array.isArray(part.fotos) && part.fotos.length > 0 ? part.fotos : [];
@@ -4275,22 +4696,82 @@ class SalesManager {
 
     // Renderizar datos del producto y formulario inferior derecho
     this.renderProductInfoML(part);
-
-    // Scroll suave hacia el producto
-    detailView.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   hideDetailView() {
-    const detailView = document.getElementById("sales-product-detail-view");
-    const container = document.getElementById("sales-parts-container");
-    if (detailView) detailView.classList.add("hidden");
-    if (container) container.classList.remove("hidden");
+    this.setSalesStep(this.selectedVehiculo ? "pieces" : (this.selectedMarca ? "vehicles" : "brands"));
   }
 
   backToFilters() {
     this.hideDetailView();
     const piezaSelect = document.getElementById("sales-filter-pieza");
     if (piezaSelect) piezaSelect.value = "";
+  }
+
+  setSalesStep(step = "brands") {
+    this.currentSalesStep = step;
+    const brandStep = document.getElementById("sales-brand-step");
+    const vehicleStep = document.getElementById("sales-vehicle-step");
+    const piecesStep = document.getElementById("sales-pieces-step");
+    const detailView = document.getElementById("sales-product-detail-view");
+    const container = document.getElementById("sales-parts-container");
+
+    if (step === "detail") {
+      if (brandStep) brandStep.classList.add("hidden");
+      if (vehicleStep) vehicleStep.classList.add("hidden");
+      if (piecesStep) piecesStep.classList.add("hidden");
+      if (container) container.classList.add("hidden");
+      if (detailView) detailView.classList.remove("hidden");
+      detailView?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    if (detailView) detailView.classList.add("hidden");
+    if (container) container.classList.remove("hidden");
+
+    if (step === "brands") {
+      if (brandStep) brandStep.classList.remove("hidden");
+      if (vehicleStep) vehicleStep.classList.add("hidden");
+      if (piecesStep) piecesStep.classList.add("hidden");
+      const countBadge = document.getElementById("sales-parts-count");
+      if (countBadge) countBadge.textContent = "Selecciona una marca para ver los vehículos disponibles";
+    } else if (step === "vehicles") {
+      if (brandStep) brandStep.classList.add("hidden");
+      if (vehicleStep) vehicleStep.classList.remove("hidden");
+      if (piecesStep) piecesStep.classList.add("hidden");
+      const countBadge = document.getElementById("sales-parts-count");
+      if (countBadge) countBadge.textContent = `Vehículos de ${this.selectedMarca || ""}`;
+      vehicleStep?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (step === "pieces") {
+      if (brandStep) brandStep.classList.add("hidden");
+      if (vehicleStep) vehicleStep.classList.add("hidden");
+      if (piecesStep) piecesStep.classList.remove("hidden");
+      const countBadge = document.getElementById("sales-parts-count");
+      if (countBadge) countBadge.textContent = `${this.availableParts.length} refacciones en existencia para ${this.selectedVehiculo || ""}`;
+      piecesStep?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  backToBrands() {
+    this.selectedMarca = "";
+    this.selectedVehiculo = "";
+    this.selectedPartId = null;
+    const brandSelect = document.getElementById("sales-filter-marca");
+    if (brandSelect) brandSelect.value = "";
+    this.resetVehiculoDropdown();
+    this.resetPiezaDropdown();
+    this.setSalesStep("brands");
+    if (window.appManager) window.appManager.renderSalesSelectionButtons();
+  }
+
+  backToVehicles() {
+    this.selectedVehiculo = "";
+    this.selectedPartId = null;
+    const vehicleSelect = document.getElementById("sales-filter-vehiculo");
+    if (vehicleSelect) vehicleSelect.value = "";
+    this.resetPiezaDropdown();
+    this.setSalesStep("vehicles");
+    if (window.appManager) window.appManager.renderSalesSelectionButtons();
   }
 
   cancelSaleAction() {
@@ -4454,8 +4935,25 @@ class SalesManager {
 
     if (titleEl) titleEl.textContent = part.pieza;
 
+    const currentBiz = window.yonkeDB ? window.yonkeDB.getCurrentBusiness() : "FaceCar";
+    const partOwner = part.owner_id || window.yonkeDB?.ownerId;
+    const partBiz = part.negocio || (partOwner === window.yonkeDB?.ownerId ? currentBiz : (currentBiz === "FaceCar" ? "Autopartes El Meyuca" : "FaceCar"));
+    const isPartner = Boolean(currentBiz && partBiz && currentBiz !== partBiz);
+
     if (vehicleBadgeEl) {
       vehicleBadgeEl.textContent = `🚗 Vehículo donador: ${part.vehiculo_origen} ${part.anio ? `(${part.anio})` : ''}`;
+      let yardBadgeEl = document.getElementById("ml-detail-yard-badge");
+      if (!yardBadgeEl && vehicleBadgeEl.parentElement) {
+        yardBadgeEl = document.createElement("div");
+        yardBadgeEl.id = "ml-detail-yard-badge";
+        vehicleBadgeEl.parentElement.insertBefore(yardBadgeEl, vehicleBadgeEl.nextSibling);
+      }
+      if (yardBadgeEl) {
+        yardBadgeEl.className = isPartner
+          ? "inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 mt-2 block"
+          : "inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-blue-100 text-blue-900 border border-blue-200 mt-2 block";
+        yardBadgeEl.innerHTML = `<span>🏢 Negocio:</span> <strong>${partBiz}</strong> ${isPartner ? '<span class="text-[10px] text-amber-700 font-bold">(Venta Cruzada en Patio Compartido)</span>' : '<span class="text-[10px] text-blue-700 font-bold">(Inventario Propio)</span>'}`;
+      }
     }
 
     if (compatEl) {
@@ -4516,6 +5014,15 @@ class SalesManager {
     // NOTA: El Precio Mínimo NO se muestra en pantalla bajo ninguna circunstancia
     if (inputContainer) {
       inputContainer.innerHTML = `
+        ${isPartner ? `
+          <div class="p-3 mb-3 bg-amber-50 rounded-xl border border-amber-300 text-xs text-amber-900 flex items-start gap-2 shadow-sm">
+            <span class="text-base">🤝</span>
+            <div>
+              <strong class="block">Venta Cruzada en Patio Compartido</strong>
+              <span>Esta pieza pertenece a <strong>${partBiz}</strong>. Al cobrarla, el inventario se descontará y el dinero entrará íntegramente a la cuenta de ${partBiz}. Tu saldo y cajas de ${currentBiz} no se mezclarán.</span>
+            </div>
+          </div>
+        ` : ''}
         <div class="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3 w-full">
           
           <!-- Botón Cancelar -->
@@ -4627,9 +5134,9 @@ class SalesManager {
     this.pendingLowPriceSale = null;
   }
 
-  completeSaleTransaction(partId, finalPrice, part) {
+  async completeSaleTransaction(partId, finalPrice, part) {
     try {
-      const result = window.yonkeDB.processSale({
+      const result = await window.yonkeDB.processSale({
         partId: partId,
         finalPrice: finalPrice,
         saleDate: new Date().toISOString().split("T")[0]
@@ -4645,11 +5152,29 @@ class SalesManager {
       if (window.dashboardManager) window.dashboardManager.updateUI();
       if (window.appManager) window.appManager.renderInventoryTable();
 
-      this.showSaleSuccessModal(result.sale, result.part);
+      if (result.isCrossSale) {
+        this.showCrossSaleSuccessModal(result.sale, result.part, result.ownerBusiness, result.sellerBusiness);
+      } else {
+        this.showSaleSuccessModal(result.sale, result.part);
+      }
       this.refreshSalesHistory();
     } catch (err) {
       alert("Error al procesar la venta: " + err.message);
     }
+  }
+
+  showCrossSaleSuccessModal(sale, part, ownerBusiness, sellerBusiness) {
+    alert(
+      `🤝 ¡VENTA CRUZADA EN PATIO COMPARTIDO REGISTRADA!\n\n` +
+      `📦 Refacción: ${part.pieza}\n` +
+      `🚗 Vehículo: ${part.vehiculo_origen}\n` +
+      `💵 Cobrado al cliente: $${Number(sale.monto_cobrado).toLocaleString()} MXN\n\n` +
+      `🏢 Negocio Dueño del Inventario: ${ownerBusiness}\n` +
+      `👤 Terminal donde se cobró: ${sellerBusiness}\n\n` +
+      `✅ El inventario de "${ownerBusiness}" se descontó en el sistema.\n` +
+      `✅ La venta y el dinero ($${sale.caja_a.toLocaleString()} Caja A / $${sale.caja_b.toLocaleString()} Caja B) entraron a la cuenta de "${ownerBusiness}".\n` +
+      `🔒 Las finanzas y el historial de "${sellerBusiness}" se mantienen 100% aislados e intactos.`
+    );
   }
 
   showSaleSuccessModal(sale, part) {
@@ -5226,7 +5751,9 @@ window.salesManager = new SalesManager();
 // ghost_parts.js - Registro y Venta de Piezas fuera de Inventario vinculadas a vehículo
 
 class GhostPartsManager {
-  constructor() {}
+  constructor() {
+    this.currentPhotoBase64 = null;
+  }
 
   init() {
     this.populateVehicleOptions();
@@ -5272,6 +5799,7 @@ class GhostPartsManager {
   }
 
   openModal() {
+    this.resetPhotoState();
     this.populateVehicleOptions();
     const modal = document.getElementById("ghost-part-modal");
     if (modal) {
@@ -5289,6 +5817,231 @@ class GhostPartsManager {
       if (form) form.reset();
       const customVehicleContainer = document.getElementById("ghost-custom-vehicle-container");
       if (customVehicleContainer) customVehicleContainer.classList.add("hidden");
+      this.resetPhotoState();
+    }
+  }
+
+  resetPhotoState() {
+    this.currentPhotoBase64 = null;
+    const previewContainer = document.getElementById("ghost-photo-preview-container");
+    if (previewContainer) previewContainer.classList.add("hidden");
+    const previewImg = document.getElementById("ghost-photo-preview-img");
+    if (previewImg) previewImg.src = "";
+    const badge = document.getElementById("ghost-ai-status-badge");
+    if (badge) badge.classList.add("hidden");
+    const camInput = document.getElementById("ghost-photo-camera");
+    if (camInput) camInput.value = "";
+    const galInput = document.getElementById("ghost-photo-gallery");
+    if (galInput) galInput.value = "";
+  }
+
+  removePhoto() {
+    this.resetPhotoState();
+  }
+
+  async handlePhotoInput(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+
+    const previewContainer = document.getElementById("ghost-photo-preview-container");
+    const previewImg = document.getElementById("ghost-photo-preview-img");
+    const statusText = document.getElementById("ghost-ai-status-text");
+    const sourceText = document.getElementById("ghost-ai-source-text");
+    const badge = document.getElementById("ghost-ai-status-badge");
+
+    try {
+      if (previewContainer) previewContainer.classList.remove("hidden");
+      if (badge) badge.classList.add("hidden");
+      if (statusText) statusText.textContent = "Comprimiendo imagen...";
+      if (sourceText) sourceText.textContent = "Preparando análisis con manuales OEM...";
+
+      let compressed = null;
+      if (window.imagesManager && typeof window.imagesManager.compressImage === "function") {
+        try {
+          compressed = await window.imagesManager.compressImage(file, 900, 0.75);
+        } catch (compErr) {
+          console.warn("Fallo en imagesManager.compressImage:", compErr);
+        }
+      }
+      if (!compressed) {
+        compressed = await this.fallbackReadFile(file);
+      }
+      if (!compressed) throw new Error("No se pudo leer la imagen.");
+
+      this.currentPhotoBase64 = compressed;
+      if (previewImg) previewImg.src = compressed;
+
+      // Identificar pieza forzando manuales de taller del fabricante (OEM)
+      await this.identifyPartWithAI(compressed);
+    } catch (err) {
+      console.error("Error al procesar foto para pieza fuera de inventario:", err);
+      if (statusText) statusText.textContent = "Error al procesar foto.";
+      alert("Error al cargar la foto: " + err.message);
+    }
+  }
+
+  fallbackReadFile(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async identifyPartWithAI(base64Photo) {
+    const statusText = document.getElementById("ghost-ai-status-text");
+    const sourceText = document.getElementById("ghost-ai-source-text");
+    const badge = document.getElementById("ghost-ai-status-badge");
+
+    if (statusText) statusText.textContent = "Analizando con IA y manuales OEM...";
+    if (sourceText) sourceText.textContent = "Consultando catálogos oficiales de fabricante (sin foros/blogs)...";
+
+    const PROMPT_OEM_MANUALS = `Eres un especialista técnico automotriz OEM con acceso a manuales oficiales de taller de fabricantes (Nissan ESM, Toyota TIS, Ford WSM/Motorcraft, GM Service Information/ACDelco, VW ELSA/ETKA, Honda ESM, Stellantis MOPAR).
+
+Analiza la fotografía de esta autoparte para una venta de mostrador e identifícala con máxima precisión técnica.
+
+DIRECTIVAS ESTRICTAS DE FUENTES:
+1. Tu ÚNICA fuente permitida de información son manuales de taller oficiales del fabricante, catálogos de partes de ensambladora y fichas técnicas de homologación de planta.
+2. Queda ESTRICTAMENTE PROHIBIDO basarse en blogs, foros de internet, publicaciones de aficionados, YouTube o páginas no oficiales de refaccionarias.
+3. Extrae la compatibilidad cruzada oficial fundamentada en catálogos del fabricante.
+
+Responde ÚNICAMENTE un JSON válido con esta estructura (sin texto adicional fuera del JSON):
+{
+  "pieza": "Nombre técnico exacto de la pieza",
+  "vehiculo_donador": "Marca Modelo Submarca y Año(s) de donde proviene según catálogo OEM (ej: Nissan Versa 1.6L 2012-2019)",
+  "precio_sugerido": 800,
+  "compatibilidad": "Compatibilidad oficial verificada en manuales del fabricante",
+  "fuente_manual_oem": "Manual oficial o catálogo de fabricante consultado (ej: Manual de Taller Nissan HR16DE)",
+  "observacion": "Detalles técnicos visibles: pines, conectores, códigos estampados y estado"
+}`;
+
+    try {
+      const mimeType = base64Photo.split(";")[0].split(":")[1] || "image/jpeg";
+      const base64Data = base64Photo.split(",")[1];
+
+      let data = null;
+
+      if (window.callGeminiProxy) {
+        const response = await window.callGeminiProxy("gemini-3.6-flash", {
+          contents: [{
+            parts: [
+              { text: PROMPT_OEM_MANUALS },
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: base64Data
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 1200
+          }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            data = JSON.parse(jsonMatch[0]);
+          }
+        }
+      }
+
+      // Fallback si no hay proxy o conexión
+      if (!data) {
+        if (typeof OEM_FALLBACK_KNOWLEDGE !== "undefined" && OEM_FALLBACK_KNOWLEDGE.length) {
+          const fb = OEM_FALLBACK_KNOWLEDGE[0];
+          data = {
+            pieza: fb.pieza,
+            vehiculo_donador: fb.vehiculo_donador,
+            precio_sugerido: fb.precio_base_sugerido,
+            compatibilidad: fb.compatibilidad_cruzada,
+            fuente_manual_oem: fb.fuente_oem,
+            observacion: fb.observacion
+          };
+        } else {
+          data = {
+            pieza: "Pieza automotriz identificada",
+            vehiculo_donador: "Vehículo donador",
+            precio_sugerido: 500,
+            compatibilidad: "Revisar compatibilidad física OEM",
+            fuente_manual_oem: "Manual oficial del fabricante",
+            observacion: "Pieza fuera de inventario inspeccionada visualmente"
+          };
+        }
+      }
+
+      // Rellenar campos de la interfaz
+      this.fillFormWithAIData(data);
+
+      if (statusText) statusText.textContent = `✓ ${data.pieza}`;
+      if (sourceText) sourceText.textContent = `Fuente OEM: ${data.fuente_manual_oem || "Manual Oficial del Fabricante"}`;
+      if (badge) badge.classList.remove("hidden");
+
+    } catch (e) {
+      console.warn("Fallo en identifyPartWithAI:", e);
+      if (statusText) statusText.textContent = "Foto cargada. Completa los datos requeridos.";
+      if (sourceText) sourceText.textContent = "No se pudo conectar con el catálogo en línea.";
+    }
+  }
+
+  fillFormWithAIData(data) {
+    if (!data) return;
+
+    // 1. Nombre de pieza
+    const nameInput = document.getElementById("ghost-part-name");
+    if (nameInput && data.pieza) {
+      nameInput.value = data.pieza;
+    }
+
+    // 2. Precio sugerido
+    const priceInput = document.getElementById("ghost-part-price");
+    if (priceInput && (data.precio_sugerido || data.precio_base_sugerido)) {
+      priceInput.value = Number(data.precio_sugerido || data.precio_base_sugerido) || "";
+    }
+
+    // 3. Compatibilidad
+    const compatInput = document.getElementById("ghost-part-compat");
+    if (compatInput && (data.compatibilidad || data.compatibilidad_cruzada)) {
+      compatInput.value = data.compatibilidad || data.compatibilidad_cruzada;
+    }
+
+    // 4. Notas y Fuente OEM
+    const notesInput = document.getElementById("ghost-part-notes");
+    if (notesInput) {
+      const source = data.fuente_manual_oem || data.fuente_oem || "Manual oficial del fabricante";
+      const obs = data.observacion || "";
+      notesInput.value = `[Fuente OEM: ${source}] ${obs}`.trim();
+    }
+
+    // 5. Vehículo donador
+    const selectVehicle = document.getElementById("ghost-vehicle-select");
+    const customVehicleContainer = document.getElementById("ghost-custom-vehicle-container");
+    const customVehicleInput = document.getElementById("ghost-custom-vehicle");
+
+    if (selectVehicle && data.vehiculo_donador) {
+      const target = data.vehiculo_donador.toLowerCase().trim();
+      let matched = false;
+      for (let i = 0; i < selectVehicle.options.length; i++) {
+        const optText = selectVehicle.options[i].text.toLowerCase();
+        const optVal = selectVehicle.options[i].value.toLowerCase();
+        if (optVal && (optVal === target || target.includes(optVal) || optText.includes(target))) {
+          selectVehicle.selectedIndex = i;
+          matched = true;
+          if (customVehicleContainer) customVehicleContainer.classList.add("hidden");
+          break;
+        }
+      }
+      if (!matched) {
+        selectVehicle.value = "NUEVO_VEHICULO";
+        if (customVehicleContainer) customVehicleContainer.classList.remove("hidden");
+        if (customVehicleInput) customVehicleInput.value = data.vehiculo_donador;
+      }
     }
   }
 
@@ -5329,7 +6082,8 @@ class GhostPartsManager {
         vehiculo_origen: vehicleName,
         monto: price,
         compatibilidad: compatInput ? compatInput.value.trim() : "",
-        observacion: notesInput ? notesInput.value.trim() : "Venta rápida de mostrador"
+        observacion: notesInput ? notesInput.value.trim() : "Venta rápida de mostrador",
+        fotos: this.currentPhotoBase64 ? [this.currentPhotoBase64] : []
       });
 
       this.closeModal();
@@ -5965,7 +6719,7 @@ class DashboardManager {
       if (legendContainer) {
         legendContainer.innerHTML = slices.map(slice => `
           <div class="flex items-center justify-between text-xs py-1 border-b border-gray-100 last:border-0">
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <span class="w-3 h-3 rounded-full inline-block" style="background-color: ${slice.color};"></span>
               <span class="font-medium text-gray-700">${slice.label}</span>
             </div>
@@ -6016,7 +6770,7 @@ class DashboardManager {
         const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
         legendHtml += `
           <div class="flex items-center justify-between text-xs py-1 border-b border-gray-100 last:border-0">
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <span class="w-3 h-3 rounded-full inline-block" style="background-color: ${s.color};"></span>
               <span class="font-medium text-gray-700">${s.label}</span>
             </div>
@@ -6189,15 +6943,48 @@ class VehicleValuatorManager {
     if (files.length === 0) return;
 
     const statusText = document.getElementById("valuator-gallery-status");
-    const newPhotos = [];
+    const zones = ["frente", "costado_izq", "costado_der", "trasera", "interiores"];
     try {
+      let assignedCount = 0;
       for (let i = 0; i < files.length; i++) {
         if (statusText) statusText.textContent = `Procesando imagen ${i + 1} de ${files.length}...`;
-        newPhotos.push(await window.imagesManager.compressImage(files[i], 900, 0.75));
+        const compressed = (window.imagesManager && typeof window.imagesManager.compressImage === "function")
+          ? await window.imagesManager.compressImage(files[i], 900, 0.75)
+          : await this.fallbackCompress(files[i]);
+        if (!compressed) continue;
+
+        // Asignar a la primera ranura de inspección vacía
+        const emptyZone = zones.find(z => !this.photos[z]);
+        if (emptyZone) {
+          this.photos[emptyZone] = compressed;
+          assignedCount++;
+          const previewImg = document.getElementById(`val-photo-preview-${emptyZone}`);
+          const placeholder = document.getElementById(`val-photo-placeholder-${emptyZone}`);
+          const checkBadge = document.getElementById(`val-photo-badge-${emptyZone}`);
+          if (previewImg && placeholder) {
+            previewImg.src = compressed;
+            previewImg.classList.remove("hidden");
+            placeholder.classList.add("hidden");
+          }
+          if (checkBadge) checkBadge.classList.remove("hidden");
+        } else {
+          // Si las 5 zonas ya están cubiertas, almacenar como fotos adicionales de inspección
+          this.galleryPhotos.push(compressed);
+        }
       }
-      for (const photo of newPhotos) this.galleryPhotos.push(photo);
+
       this.resetVisualInspection();
-      if (statusText) statusText.textContent = `${this.galleryPhotos.length} imagen(es) adicional(es) listas para analizar`;
+
+      const aiBtn = document.getElementById("valuator-ai-scan-btn");
+      if (aiBtn) {
+        aiBtn.classList.remove("opacity-60");
+        aiBtn.classList.add("animate-pulse");
+      }
+
+      const totalPhotos = Object.values(this.photos).filter(Boolean).length + this.galleryPhotos.length;
+      if (statusText) {
+        statusText.textContent = `✓ ${totalPhotos} foto(s) listas para inspección`;
+      }
     } catch (err) {
       console.error("Error al cargar imágenes de galería para valuación:", err);
       if (statusText) statusText.textContent = "No se pudieron procesar las imágenes seleccionadas.";
@@ -7929,48 +8716,58 @@ class ImagesManager {
   // Comprimir imagen usando Canvas HTML5 para que no pese nada y no agote almacenamiento local
   compressImage(file, maxWidth = 800, quality = 0.75) {
     return new Promise((resolve, reject) => {
-      const objectUrl = URL.createObjectURL(file);
-      const img = new Image();
-      const cleanup = () => {
-        img.onload = null;
-        img.onerror = null;
-        URL.revokeObjectURL(objectUrl);
-        img.removeAttribute("src");
+      if (!file) return reject(new Error("Archivo inválido"));
+
+      const readViaFileReader = () => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          processSource(e.target.result);
+        };
+        reader.onerror = () => {
+          reject(new Error("No se pudo leer el archivo de imagen."));
+        };
+        reader.readAsDataURL(file);
       };
 
-      img.onload = () => {
-        try {
-          let width = img.width;
-          let height = img.height;
+      const processSource = (src) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            let width = img.width || 800;
+            let height = img.height || 600;
 
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext("2d");
+            if (!ctx) throw new Error("No se pudo preparar el lienzo.");
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
+            canvas.width = 0;
+            canvas.height = 0;
+            resolve(compressedDataUrl);
+          } catch (error) {
+            resolve(src);
           }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext("2d");
-          if (!ctx) throw new Error("No se pudo preparar el lienzo para comprimir la imagen.");
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
-          canvas.width = 0;
-          canvas.height = 0;
-          cleanup();
-          resolve(compressedDataUrl);
-        } catch (error) {
-          cleanup();
-          reject(error);
-        }
+        };
+        img.onerror = () => {
+          if (typeof src === "string" && src.startsWith("data:")) {
+            resolve(src);
+          } else {
+            readViaFileReader();
+          }
+        };
+        img.src = src;
       };
-      img.onerror = () => {
-        cleanup();
-        reject(new Error("No se pudo leer el archivo de imagen."));
-      };
-      img.src = objectUrl;
+
+      readViaFileReader();
     });
   }
 
@@ -8943,7 +9740,23 @@ class AIRegisterManager {
       if (statusBox) statusBox.classList.remove("hidden");
       for (let i = 0; i < files.length; i++) {
         if (statusText) statusText.textContent = `Comprimiendo imagen ${i + 1} de ${files.length}...`;
-        this.currentPhotos.push(await window.imagesManager.compressImage(files[i], 900, 0.75));
+        let compressed = null;
+        if (window.imagesManager && typeof window.imagesManager.compressImage === "function") {
+          try {
+            compressed = await window.imagesManager.compressImage(files[i], 900, 0.75);
+          } catch (compErr) {
+            console.warn("Fallo al comprimir con canvas, usando fallback:", compErr);
+          }
+        }
+        if (!compressed) {
+          compressed = await this.fallbackReadFile(files[i]);
+        }
+        if (compressed) {
+          this.currentPhotos.push(compressed);
+        }
+      }
+      if (this.currentPhotos.length === 0) {
+        throw new Error("No se pudo leer ninguna imagen seleccionada.");
       }
       this.currentPhoto = this.currentPhotos[0];
       const previewImg = document.getElementById("ai-reg-preview-img");
@@ -8954,8 +9767,18 @@ class AIRegisterManager {
     } catch (err) {
       console.error("Error al procesar foto:", err);
       alert("Error al cargar la imagen. Intenta de nuevo.");
+      const statusBox = document.getElementById("ai-reg-analysis-status");
+      if (statusBox) statusBox.classList.add("hidden");
     }
-    event.target.value = "";
+  }
+
+  fallbackReadFile(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
   }
 
   async runAIAnalysis() {
@@ -9203,7 +10026,7 @@ class AIRegisterManager {
         <!-- Orden Vertical: Mercado Libre, Facebook Marketplace, Amazon -->
         <div class="space-y-1.5">
           <div class="flex items-center justify-between bg-yellow-50/80 border border-yellow-200 rounded-lg px-3 py-2">
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <span class="text-sm">🛒</span>
               <span class="font-bold text-yellow-900">Mercado Libre</span>
             </div>
@@ -9211,7 +10034,7 @@ class AIRegisterManager {
           </div>
 
           <div class="flex items-center justify-between bg-blue-50/80 border border-blue-200 rounded-lg px-3 py-2">
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <span class="text-sm">📘</span>
               <span class="font-bold text-blue-900">Facebook Marketplace</span>
             </div>
@@ -9219,7 +10042,7 @@ class AIRegisterManager {
           </div>
 
           <div class="flex items-center justify-between bg-amber-50/80 border border-amber-300 rounded-lg px-3 py-2">
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <span class="text-sm">📦</span>
               <span class="font-bold text-amber-900">Amazon México</span>
             </div>
@@ -10199,30 +11022,37 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
   }
 
   // BOTÓN 1: Aceptar TODOS los cambios propuestos (Precios 3:1 + Demanda + Compatibilidad)
-  acceptAll() {
+  async acceptAll() {
     if (!this.proposals || this.proposals.length === 0) return;
     const confirmAction = confirm(
       `¿Deseas aplicar la actualización de COMPATIBILIDAD, DEMANDA y PRECIOS 3:1 a TODAS las ${this.proposals.length} piezas del inventario?`
     );
     if (!confirmAction) return;
 
-    let updatedCount = 0;
+    const saves = [];
     this.proposals.forEach(p => {
-      window.yonkeDB.updatePart(p.id, {
+      const part = window.yonkeDB.updatePart(p.id, {
         precio_base: p.suggestedBase,
         precio_minimo: p.suggestedMin,
         compatibilidad: p.suggestedCompat,
         demanda: p.demanda,
         busquedas_info: p.busquedas_info
       });
-      updatedCount++;
+      if (part && part._cloudSave) saves.push(part._cloudSave);
     });
 
-    this._finishUpdate(`✅ ¡Se actualizaron con éxito los PRECIOS (Regla 3:1), DEMANDA y COMPATIBILIDAD OEM de TODAS las piezas (${updatedCount})!`);
+    try {
+      await Promise.all(saves);
+    } catch (err) {
+      alert("Los cambios quedaron en este teléfono, pero Supabase no los confirmó. No cierres la app hasta corregirlo: " + (err.message || err));
+      return;
+    }
+
+    this._finishUpdate(`✅ ¡Se actualizaron con éxito los PRECIOS (Regla 3:1), DEMANDA y COMPATIBILIDAD OEM de TODAS las piezas (${saves.length})!`);
   }
 
   // BOTÓN 2: Aceptar SOLO los cambios específicos marcados
-  acceptSelected() {
+  async acceptSelected() {
     const selectedItems = this.proposals.filter(p => p.selected);
     if (selectedItems.length === 0) {
       alert("⚠️ No tienes ninguna pieza seleccionada en la lista. Marca las casillas de las piezas que deseas actualizar.");
@@ -10234,23 +11064,30 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
     );
     if (!confirmAction) return;
 
-    let updatedCount = 0;
+    const saves = [];
     selectedItems.forEach(p => {
-      window.yonkeDB.updatePart(p.id, {
+      const part = window.yonkeDB.updatePart(p.id, {
         precio_base: p.suggestedBase,
         precio_minimo: p.suggestedMin,
         compatibilidad: p.suggestedCompat,
         demanda: p.demanda,
         busquedas_info: p.busquedas_info
       });
-      updatedCount++;
+      if (part && part._cloudSave) saves.push(part._cloudSave);
     });
 
-    this._finishUpdate(`✅ ¡Se actualizaron ${updatedCount} piezas seleccionadas con éxito! Las demás no fueron modificadas.`);
+    try {
+      await Promise.all(saves);
+    } catch (err) {
+      alert("Los cambios quedaron en este teléfono, pero Supabase no los confirmó: " + (err.message || err));
+      return;
+    }
+
+    this._finishUpdate(`✅ ¡Se actualizaron ${saves.length} piezas seleccionadas con éxito! Las demás no fueron modificadas.`);
   }
 
   // BOTÓN 3: Declinar cambios específicos marcados y mantener el resto
-  declineSelected() {
+  async declineSelected() {
     const unselectedItems = this.proposals.filter(p => !p.selected);
     const selectedItems = this.proposals.filter(p => p.selected);
 
@@ -10269,19 +11106,26 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
     );
     if (!confirmAction) return;
 
-    let updatedCount = 0;
+    const saves = [];
     unselectedItems.forEach(p => {
-      window.yonkeDB.updatePart(p.id, {
+      const part = window.yonkeDB.updatePart(p.id, {
         precio_base: p.suggestedBase,
         precio_minimo: p.suggestedMin,
         compatibilidad: p.suggestedCompat,
         demanda: p.demanda,
         busquedas_info: p.busquedas_info
       });
-      updatedCount++;
+      if (part && part._cloudSave) saves.push(part._cloudSave);
     });
 
-    this._finishUpdate(`✅ Se declinaron ${selectedItems.length} piezas marcadas y se actualizaron las ${updatedCount} piezas restantes con éxito.`);
+    try {
+      await Promise.all(saves);
+    } catch (err) {
+      alert("Los cambios quedaron en este teléfono, pero Supabase no los confirmó: " + (err.message || err));
+      return;
+    }
+
+    this._finishUpdate(`✅ Se declinaron ${selectedItems.length} piezas marcadas y se actualizaron las ${saves.length} piezas restantes con éxito.`);
   }
 
   // BOTÓN 4: Declinar TODOS los cambios (Cancelar sin modificar nada)
@@ -10317,6 +11161,19 @@ class AppManager {
     this.inventoryBrand = "";
     this.inventoryVehicle = "";
     this.inventoryFiltersInitialized = false;
+    this.selectedInventoryYardBusiness = "TODOS";
+  }
+
+  setInventoryYardFilter(business) {
+    this.selectedInventoryYardBusiness = business || "TODOS";
+    const buttons = document.querySelectorAll("#inventory-yard-business-selector button[data-inv-yard]");
+    buttons.forEach(btn => {
+      const isTarget = btn.dataset.invYard === this.selectedInventoryYardBusiness;
+      btn.className = isTarget 
+        ? "px-2.5 py-1 text-xs font-bold rounded-lg transition bg-blue-600 text-white shadow cursor-pointer"
+        : "px-2.5 py-1 text-xs font-bold rounded-lg transition text-slate-600 hover:bg-white cursor-pointer";
+    });
+    this.renderInventoryTable();
   }
 
   async init() {
@@ -10361,16 +11218,32 @@ class AppManager {
     }
   }
 
+  toggleMobileMenu() {
+    const wrapper = document.getElementById("nav-dropdown-wrapper");
+    if (!wrapper) return;
+    const isOpen = wrapper.classList.toggle("mobile-open");
+    const icon = document.getElementById("mobile-menu-toggle-icon");
+    const text = document.getElementById("mobile-menu-toggle-text");
+    if (icon) icon.textContent = isOpen ? "✕" : "☰";
+    if (text) text.textContent = isOpen ? "Cerrar" : "Menú";
+  }
+
+  closeMobileMenu() {
+    const wrapper = document.getElementById("nav-dropdown-wrapper");
+    if (wrapper && wrapper.classList.contains("mobile-open")) {
+      wrapper.classList.remove("mobile-open");
+      const icon = document.getElementById("mobile-menu-toggle-icon");
+      const text = document.getElementById("mobile-menu-toggle-text");
+      if (icon) icon.textContent = "☰";
+      if (text) text.textContent = "Menú";
+    }
+  }
+
   setupNavigation() {
     const navButtons = document.querySelectorAll("[data-nav-view]");
     navButtons.forEach(btn => {
       btn.addEventListener("click", (e) => {
         const view = btn.getAttribute("data-nav-view");
-        if (view === "finances") {
-          e.stopPropagation();
-          document.getElementById("finance-subnav")?.classList.toggle("hidden");
-          return;
-        }
         if (view) this.switchView(view);
       });
     });
@@ -10379,7 +11252,14 @@ class AppManager {
     if (financeMenuButton) {
       financeMenuButton.addEventListener("click", (e) => {
         e.stopPropagation();
-        document.getElementById("finance-subnav")?.classList.toggle("hidden");
+        const subnav = document.getElementById("finance-subnav");
+        const arrow = document.getElementById("finance-menu-arrow");
+        const isNowVisible = subnav?.classList.toggle("hidden") === false;
+        // classList.toggle returns true if class was ADDED (i.e. now hidden)
+        // So we invert: if toggle returned true the class is hidden, if false it's visible
+        const isVisible = !(subnav?.classList.contains("hidden"));
+        if (arrow) arrow.textContent = isVisible ? "▾" : "▸";
+        this.switchView("finances");
       });
     }
 
@@ -10388,6 +11268,7 @@ class AppManager {
         this.switchView("finances");
         const panel = document.getElementById(`finance-subview-${btn.getAttribute("data-finance-subview")}`);
         if (panel) panel.classList.remove("hidden");
+        this.closeMobileMenu();
       });
     });
 
@@ -10407,6 +11288,7 @@ class AppManager {
   }
 
   switchView(viewName) {
+    this.closeMobileMenu();
     this.currentView = viewName;
     document.querySelectorAll("[id^='finance-subview-']").forEach(panel => panel.classList.add("hidden"));
 
@@ -10443,6 +11325,10 @@ class AppManager {
       window.financesManager.updateUI();
     } else if (viewName === "sales" && window.salesManager) {
       window.salesManager.renderPartsGrid();
+      // Si el manager ya tiene setSalesStep, restaurar al step correcto
+      if (window.salesManager.setSalesStep) {
+        window.salesManager.setSalesStep(window.salesManager.currentSalesStep || "brands");
+      }
     } else if (viewName === "inventory") {
       this.initializeInventoryFilters();
       this.renderInventoryTable();
@@ -10628,8 +11514,10 @@ class AppManager {
       vehicleCards.push({ button, image });
     });
 
-    vehicleStep.classList.toggle("hidden", !brandSelect.value);
-    piecesStep.classList.toggle("hidden", !vehicleSelect.value);
+    // Delegar visibilidad de steps a setSalesStep para navegación por interfaz limpia
+    if (manager.setSalesStep) {
+      manager.setSalesStep(manager.currentSalesStep || "brands");
+    }
     vehicleCards.forEach(({ button, image }) => {
       button.setAttribute("aria-pressed", String(vehicleSelect.value === button.dataset.vehicleValue));
       this.observeSalesVehicleCard(image, brandSelect.value);
@@ -10779,11 +11667,25 @@ class AppManager {
       label.className = "piece-name";
       label.textContent = part.pieza || "Pieza sin nombre";
       button.append(label);
+
+      // Distintivo de Negocio en Patio Compartido
+      const bizBadge = document.createElement("span");
+      const partBiz = part.negocio || "FaceCar";
+      bizBadge.className = partBiz === "Autopartes El Meyuca"
+        ? "inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 mt-1"
+        : "inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-300 mt-1";
+      bizBadge.textContent = partBiz;
+      button.append(bizBadge);
       button.addEventListener("click", () => {
-        const input = document.getElementById("sales-filter-pieza");
-        if (!input) return;
-        input.value = String(part.pieza || "").trim();
-        input.dispatchEvent(new Event("input", { bubbles: true }));
+        // Llamar directamente a openProductDetail para ir al step "detail"
+        if (window.salesManager) {
+          window.salesManager.openProductDetail(part.id);
+        } else {
+          const input = document.getElementById("sales-filter-pieza");
+          if (!input) return;
+          input.value = String(part.pieza || "").trim();
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
       });
       container.append(button);
     });
@@ -11040,13 +11942,16 @@ class AppManager {
     }
 
     const selectedVehicle = this.normalizeInventoryVehicle(this.inventoryVehicle);
-    const parts = window.yonkeDB.getParts().filter(part =>
+    let parts = window.yonkeDB.getParts().filter(part =>
       this.normalizeInventoryVehicle(part.vehiculo_origen) === selectedVehicle
     );
+    if (this.selectedInventoryYardBusiness && this.selectedInventoryYardBusiness !== "TODOS") {
+      parts = parts.filter(p => (p.negocio || "FaceCar") === this.selectedInventoryYardBusiness);
+    }
     tableContainer?.classList.toggle("hidden", parts.length === 0);
     emptyState?.classList.toggle("hidden", parts.length > 0);
     if (countEl) countEl.textContent = parts.length
-      ? `${parts.length} piezas registradas para ${this.inventoryVehicle}`
+      ? `${parts.length} piezas registradas para ${this.inventoryVehicle} ${this.selectedInventoryYardBusiness !== 'TODOS' ? `[${this.selectedInventoryYardBusiness}]` : ''}`
       : `No hay piezas registradas para ${this.inventoryVehicle}`;
     if (!parts.length) {
       tbody.innerHTML = "";
@@ -11097,12 +12002,16 @@ class AppManager {
         demandaBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300">⚡ Media</span>`;
       }
 
+      const partBiz = p.negocio || "FaceCar";
+      const bizBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold ${partBiz === 'Autopartes El Meyuca' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-blue-100 text-blue-900 border border-blue-300'}">${escapeHtml(partBiz)}</span>`;
+
       html += `
         <tr
           class="border-b border-gray-100 hover:bg-amber-50 cursor-pointer text-xs transition ${isDanada ? 'bg-rose-50/20' : ''}"
           data-part-id="${escapeHtml(p.id)}"
         >
           <td class="py-2.5 px-3 font-mono text-gray-400">${escapeHtml(p.id)}</td>
+          <td class="py-2.5 px-3 whitespace-nowrap">${bizBadge}</td>
           <td class="py-2.5 px-3 font-bold text-gray-900">${escapeHtml(p.pieza)}</td>
           <td class="py-2.5 px-3 text-blue-700 font-semibold">${escapeHtml(p.vehiculo_origen)}</td>
           <td class="py-2.5 px-3 text-gray-500">${escapeHtml(p.anio || '-')}</td>
@@ -11175,6 +12084,8 @@ class AppManager {
     document.getElementById("edit-field-fecha-venta").value = part.fecha_venta || "";
     document.getElementById("edit-field-compatibilidad").value = part.compatibilidad || "";
     document.getElementById("edit-field-observacion").value = part.observacion || "";
+    const negocioSelect = document.getElementById("edit-field-negocio");
+    if (negocioSelect) negocioSelect.value = part.negocio || "FaceCar";
 
     const modal = document.getElementById("edit-part-modal");
     if (modal) modal.classList.remove("hidden");
@@ -11202,7 +12113,8 @@ class AppManager {
       venta_final: document.getElementById("edit-field-venta-final").value ? parseFloat(document.getElementById("edit-field-venta-final").value) : null,
       fecha_venta: document.getElementById("edit-field-fecha-venta").value || null,
       compatibilidad: document.getElementById("edit-field-compatibilidad").value.trim(),
-      observacion: document.getElementById("edit-field-observacion").value.trim()
+      observacion: document.getElementById("edit-field-observacion").value.trim(),
+      negocio: document.getElementById("edit-field-negocio")?.value || "FaceCar"
     };
     window.yonkeDB.updatePart(id, updatedData);
     this.closeEditModal();
