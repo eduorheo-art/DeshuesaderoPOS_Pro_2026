@@ -1,4 +1,4 @@
-// ai_register.js - Registro de Piezas con Gemini Vision API (OEM preciso + precios de mercado)
+﻿// ai_register.js - Registro de Piezas con Gemini Vision API (OEM preciso + precios de mercado)
 
 localStorage.removeItem("yonke_gemini_api_key");
 
@@ -276,7 +276,7 @@ class AIRegisterManager {
           }
         });
       }
-      const response = await window.callGeminiProxy("gemini-3.6-flash", {
+      const response = await window.callGeminiProxy("gemini-2.0-flash", {
             contents: [{
               parts: [
                 { text: OEM_VISION_PROMPT },
@@ -312,12 +312,10 @@ class AIRegisterManager {
       if (err.message.includes("401") || err.message.includes("API_KEY")) {
         localStorage.removeItem("yonke_gemini_api_key");
         alert("❌ API Key inválida o expirada. Se ha borrado de la memoria. Puedes ingresar una nueva.");
+      } else if (err.message.includes("503") || err.message.includes("UNAVAILABLE") || err.message.includes("429")) {
+        alert("⚠️ Los servidores de IA están con alta demanda en este momento.\n\nEspera unos segundos e intenta de nuevo. Si el problema persiste, registra la pieza manualmente.");
       } else {
-        // En caso de fallo de red, activar el catálogo técnico de respaldo
-        alert(`⚠️ Aviso de conexión con IA:\n${err.message}\n\nSe cargará el diagnóstico técnico de respaldo fundamentado en catálogos OEM.`);
-        const fallback = OEM_FALLBACK_KNOWLEDGE[0];
-        this.detectedData = fallback;
-        this.showVerificationStep(fallback);
+        alert(`⚠️ Aviso de conexión con IA:\n${err.message}\n\nIntenta de nuevo o registra la pieza manualmente.`);
       }
     }
   }

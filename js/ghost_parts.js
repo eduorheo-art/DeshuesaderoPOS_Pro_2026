@@ -1,4 +1,4 @@
-// ghost_parts.js - Registro y Venta de Piezas fuera de Inventario vinculadas a vehículo con IA y Manuales OEM
+﻿// ghost_parts.js - Registro y Venta de Piezas fuera de Inventario vinculadas a vehículo con IA y Manuales OEM
 
 class GhostPartsManager {
   constructor() {
@@ -174,7 +174,7 @@ Responde ÚNICAMENTE un JSON válido con esta estructura (sin texto adicional fu
       let data = null;
 
       if (window.callGeminiProxy) {
-        const response = await window.callGeminiProxy("gemini-3.6-flash", {
+        const response = await window.callGeminiProxy("gemini-2.0-flash", {
           contents: [{
             parts: [
               { text: PROMPT_OEM_MANUALS },

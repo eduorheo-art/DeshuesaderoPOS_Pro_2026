@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -3032,15 +3032,47 @@ window.callGeminiProxy = async (model, request) => {
   const { data, error } = await client.auth.getSession();
   if (error) throw error;
   if (!data.session) throw new Error("Inicia sesión para usar las funciones de IA.");
-  return fetch(`${SUPABASE_URL}/functions/v1/gemini-proxy`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${data.session.access_token}`
-    },
-    body: JSON.stringify({ model, request })
-  });
+
+  // Cadena de modelos: intentar en orden hasta encontrar uno disponible
+  const MODEL_CHAIN = [
+    model,
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash"
+  ];
+  // Eliminar duplicados manteniendo orden
+  const modelsToTry = [...new Set(MODEL_CHAIN)];
+
+  let lastError = null;
+  for (const tryModel of modelsToTry) {
+    let attempt = 0;
+    while (attempt < 2) {
+      attempt++;
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gemini-proxy`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${data.session.access_token}`
+          },
+          body: JSON.stringify({ model: tryModel, request })
+        });
+        if (res.status === 503 || res.status === 429) {
+          // Sobrecarga o rate-limit: esperar brevemente y probar siguiente modelo
+          lastError = new Error(`Error API ${res.status} en modelo ${tryModel}`);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1200));
+          else break; // pasar al siguiente modelo
+        } else {
+          return res; // éxito (cualquier otro status lo maneja el llamador)
+        }
+      } catch (fetchErr) {
+        lastError = fetchErr;
+        break;
+      }
+    }
+  }
+  throw lastError || new Error("Todos los modelos de IA no están disponibles. Intenta de nuevo en un momento.");
 };
 
 async function requireYonkeAuth(client) {
@@ -5731,7 +5763,7 @@ Devuelve únicamente JSON con este formato:
       const mimeType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";")) || "image/jpeg";
       const rawBase64 = base64Data.split(",")[1];
 
-      const aiResponse = await window.callGeminiProxy("gemini-3.6-flash", {
+      const aiResponse = await window.callGeminiProxy("gemini-2.0-flash", {
         contents: [{
           parts: [
             { text: prompt },
@@ -6181,7 +6213,7 @@ Responde ÚNICAMENTE un JSON válido con esta estructura (sin texto adicional fu
       let data = null;
 
       if (window.callGeminiProxy) {
-        const response = await window.callGeminiProxy("gemini-3.6-flash", {
+        const response = await window.callGeminiProxy("gemini-2.0-flash", {
           contents: [{
             parts: [
               { text: PROMPT_OEM_MANUALS },
@@ -7467,7 +7499,7 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
 
     if (statusText) statusText.textContent = "Analizando con Gemini AI y manuales de fabricante...";
 
-    const res = await window.callGeminiProxy("gemini-3.6-flash", {
+    const res = await window.callGeminiProxy("gemini-2.0-flash", {
         contents: [{ parts: partsPayload }],
         tools: [{ google_search: {} }],
         generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
@@ -8398,7 +8430,7 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       });
       if (parts.length === 1) throw new Error("No hay imágenes válidas para enviar al análisis.");
 
-      const response = await window.callGeminiProxy("gemini-3.6-flash", {
+      const response = await window.callGeminiProxy("gemini-2.0-flash", {
         contents: [{ parts }],
         generationConfig: { maxOutputTokens: 2048, temperature: 0.1 }
       });
@@ -8584,7 +8616,12 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       alert(`Inspección IA completada. Se marcaron ${countMarked} piezas con daño visible.\n\n${isChocado ? "Se detectó vehículo chocado: selecciona una de las 3 imágenes de referencia oficiales como foto principal." : "Vehículo sin choque: selecciona cuál de las fotos de inspección será la foto principal."}`);
     } catch (error) {
       console.error("No se pudo completar la inspección visual con IA:", error);
-      alert(`No se pudo completar la inspección con IA: ${error.message}`);
+      const msg = error.message || "";
+      if (msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("unavailable")) {
+        alert("⚠️ Aviso de conexión con IA:\n" + msg + "\n\nSe cargará el diagnóstico técnico de respaldo fundamentado en catálogos OEM.");
+      } else {
+        alert(`No se pudo completar la inspección con IA: ${msg}`);
+      }
     } finally {
       statusModal?.classList.add("hidden");
     }
@@ -10144,7 +10181,7 @@ class AIRegisterManager {
           }
         });
       }
-      const response = await window.callGeminiProxy("gemini-3.6-flash", {
+      const response = await window.callGeminiProxy("gemini-2.0-flash", {
             contents: [{
               parts: [
                 { text: OEM_VISION_PROMPT },
@@ -10795,7 +10832,7 @@ class AIPriceUpdaterManager {
         compatibilidad_actual: part.compatibilidad || ""
       }));
       const prompt = `Revisa los registros del inventario con Google Search. Para PRECIO consulta publicaciones vigentes de piezas usadas OEM en México. Para COMPATIBILIDAD consulta documentación y catálogos oficiales OEM del año/modelo; no infieras compatibilidad. Estima demanda Alta/Media/Baja solo cuando haya evidencia de mercado. Devuelve únicamente JSON válido como array con los mismos id y campos: {"id":"...","precio_base":0,"precio_fuente":"URL","demanda":"Alta|Media|Baja","busquedas_info":"estimación y periodo","demanda_fuente":"URL","compatibilidad":"...","compatibilidad_fuente":"URL"}. Deja un campo vacío si no puedes respaldarlo con su fuente. No propongas datos sin evidencia.\nInventario: ${JSON.stringify(inventory)}`;
-      const response = await window.callGeminiProxy("gemini-3.6-flash", {
+      const response = await window.callGeminiProxy("gemini-2.0-flash", {
           contents: [{ parts: [{ text: prompt }] }],
           tools: [{ google_search: {} }],
           generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
