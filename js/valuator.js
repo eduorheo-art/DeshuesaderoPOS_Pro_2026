@@ -1,10 +1,8 @@
 // valuator.js - Valuador In-Situ e Inspección Fotográfica Multizona con IA para Compra de Vehículos
 // Cumple estrictamente con directivas OEM oficiales (excluyendo foros y blogs) y Regla Sagrada Yonke 3:1
 
-localStorage.removeItem("yonke_gemini_api_key");
-
 function getGeminiApiKey() {
-  return window.callGeminiProxy ? "server-side" : "";
+  return localStorage.getItem("yonke_gemini_api_key") || (window.callGeminiProxy ? "server-side" : "");
 }
 
 class VehicleValuatorManager {
@@ -407,29 +405,27 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
 
     if (statusText) statusText.textContent = "Analizando con Gemini AI y manuales de fabricante...";
 
-    let res = null;
-    try {
-      res = await window.callGeminiProxy("gemini-2.0-flash", {
-        contents: [{ parts: partsPayload }],
-        tools: [{ googleSearch: {} }],
-        generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
-      });
-      if (!res.ok) {
-        res = await window.callGeminiProxy("gemini-2.0-flash", {
-          contents: [{ parts: partsPayload }],
-          generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
-        });
-      }
-    } catch (proxyErr) {
-      console.warn("Fallo en Gemini con tools, reintentando directo:", proxyErr);
-      res = await window.callGeminiProxy("gemini-2.0-flash", {
-        contents: [{ parts: partsPayload }],
-        generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
-      });
+    const hasImages = partsPayload.some(p => p.inlineData);
+    const reqPayload = {
+      contents: [{ parts: partsPayload }],
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
+    };
+    // REGLA API: Google Gemini rechaza con 400 el uso de Google Search grounding junto con imágenes multimodal
+    if (!hasImages) {
+      reqPayload.tools = [{ googleSearch: {} }];
     }
 
-    if (!res.ok) {
-      throw new Error(`Gemini API error: ${res.status}`);
+    let res = null;
+    try {
+      res = await window.callGeminiProxy("gemini-2.0-flash", reqPayload);
+    } catch (proxyErr) {
+      console.warn("Fallo con gemini-2.0-flash, reintentando con modelo alternativo:", proxyErr);
+      if (reqPayload.tools) delete reqPayload.tools;
+      res = await window.callGeminiProxy("gemini-3.6-flash", reqPayload);
+    }
+
+    if (!res || !res.ok) {
+      throw new Error(`Gemini API error: ${res ? res.status : "Sin respuesta"}`);
     }
 
     const data = await res.json();
@@ -1250,20 +1246,20 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
     const cleanAnio = (anio || "").trim();
     const cleanColor = (color || "").trim().toLowerCase();
 
-    // Diccionario de colores comunes español -> palabras clave en inglés y español
+    // Diccionario de colores comunes con equivalencias multilingües (español, inglés, alemán, francés)
     const colorDictionary = {
-      "gris": ["gray", "grey", "silver", "gris", "plata"],
-      "plata": ["silver", "gray", "grey", "plata", "gris"],
-      "blanco": ["white", "blanco"],
-      "negro": ["black", "negro"],
-      "rojo": ["red", "rojo", "tinto", "maroon", "crimson"],
-      "azul": ["blue", "azul", "navy"],
-      "verde": ["green", "verde"],
-      "amarillo": ["yellow", "amarillo"],
+      "gris": ["gray", "grey", "silver", "gris", "plata", "grau", "silber", "argent"],
+      "plata": ["silver", "gray", "grey", "plata", "gris", "silber", "argent"],
+      "blanco": ["white", "blanco", "blanc", "weiss", "weisz"],
+      "negro": ["black", "negro", "noir", "schwarz"],
+      "rojo": ["red", "rojo", "tinto", "maroon", "crimson", "rouge", "rot"],
+      "azul": ["blue", "azul", "navy", "bleu", "blau"],
+      "verde": ["green", "verde", "vert", "grun", "grün"],
+      "amarillo": ["yellow", "amarillo", "jaune", "gelb"],
       "dorado": ["gold", "golden", "dorado", "beige", "sand", "champagne"],
       "arena": ["sand", "beige", "tan", "arena", "champagne"],
-      "cafe": ["brown", "cafe", "marron"],
-      "marron": ["brown", "marron"],
+      "cafe": ["brown", "cafe", "marron", "braun"],
+      "marron": ["brown", "marron", "braun"],
       "naranja": ["orange", "naranja"]
     };
 
@@ -1280,58 +1276,86 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
     }
     targetColorKeywords = [...new Set(targetColorKeywords)];
 
-    const allColors = ["white", "black", "red", "blue", "green", "yellow", "gold", "orange", "brown", "silver", "gray", "grey", "purple"];
+    const allColors = [
+      "white", "blanco", "blanc", "weiss",
+      "black", "negro", "noir", "schwarz",
+      "red", "rojo", "rouge", "rot",
+      "blue", "azul", "bleu", "blau",
+      "green", "verde", "vert", "grun", "grün",
+      "yellow", "amarillo", "jaune", "gelb",
+      "gold", "dorado", "orange", "naranja",
+      "brown", "cafe", "marron", "braun",
+      "silver", "gray", "grey", "plata", "gris", "silber", "argent", "purple"
+    ];
     const conflictingColors = allColors.filter(c => !targetColorKeywords.includes(c));
-
     const numericYear = parseInt(cleanAnio, 10);
 
     const evaluateCandidate = (title, url) => {
       if (!url || !/^https:\/\//i.test(url)) return;
       const lowerTitle = (title || "").toLowerCase();
 
-      if (/logo|icon|emblem|badge|diagram|engine|motor|interior|wheel|taillight|headlight|dashboard|speedometer|steering|chassis|seat|door_panel|crash_test/i.test(lowerTitle)) {
+      // Descartar fotos que no sean del auto completo
+      if (/logo|icon|emblem|badge|diagram|engine|motor|interior|wheel|taillight|headlight|dashboard|speedometer|steering|chassis|seat|door_panel|crash_test|broken|wreck/i.test(lowerTitle)) {
         return;
       }
 
-      let score = 0;
+      // RECHAZO ESTRICTO DE COLOR OPUESTO: Si el auto es Gris/Plata, descartar verde, rojo, azul, negro, blanco, etc.
+      if (targetColorKeywords.length > 0) {
+        const hasConflict = conflictingColors.some(cc => {
+          const rx = new RegExp(`(^|[^a-záéíóúñ])${cc}([^a-záéíóúñ]|$)`, "i");
+          return rx.test(lowerTitle);
+        });
+        if (hasConflict) {
+          return; // Descartado de raíz: jamás mostrar auto verde/rojo si el capturado es gris
+        }
+      }
+
       const lowerMarca = cleanMarca.toLowerCase();
       const lowerVehiculo = cleanVehiculo.toLowerCase();
 
-      if (lowerVehiculo && lowerTitle.includes(lowerVehiculo)) score += 50;
-      if (lowerMarca && lowerTitle.includes(lowerMarca)) score += 30;
-
+      // RECHAZO DE GENERACIÓN O MARCA INCOMPATIBLE (ej: Daewoo Matiz 1999 cuando se busca Chevrolet Matiz 2012)
+      if (lowerMarca === "chevrolet" && numericYear >= 2005 && /daewoo/i.test(lowerTitle)) {
+        return; // Descartar Daewoo de generación 1 para un Chevrolet 2005+
+      }
       if (lowerMarca && !lowerTitle.includes(lowerMarca)) {
-        if (/daewoo|pontiac|holden|opel|vauxhall/i.test(lowerTitle) && lowerMarca === "chevrolet") {
-          score -= 10;
-        } else if (/ford|nissan|toyota|volkswagen|honda|fiat|renault|peugeot/i.test(lowerTitle)) {
-          score -= 50;
+        if (/ford|nissan|toyota|volkswagen|honda|fiat|renault|peugeot|hyundai|kia/i.test(lowerTitle)) {
+          return; // Descartar marcas ajenas
+        }
+      }
+      if (!isNaN(numericYear)) {
+        // Descartar modelos obsoletos de otra década (ej: 1998-2004 para un 2008+)
+        if (numericYear >= 2008 && /\b(199\d|200[0-4])\b/.test(lowerTitle)) {
+          return;
+        }
+        // Descartar generaciones mucho más nuevas (ej: 2016-2025 para un 2012)
+        if (numericYear <= 2014 && /\b(201[6-9]|202\d)\b/.test(lowerTitle)) {
+          return;
         }
       }
 
+      let score = 0;
+      if (lowerVehiculo && lowerTitle.includes(lowerVehiculo)) score += 60;
+      if (lowerMarca && lowerTitle.includes(lowerMarca)) score += 40;
+
+      // Bonificación alta por coincidencia de color
       if (targetColorKeywords.length > 0) {
-        const matchesColor = targetColorKeywords.some(kw => lowerTitle.includes(kw));
-        if (matchesColor) {
-          score += 60;
-        } else {
-          const hasConflictingColor = conflictingColors.some(cc => lowerTitle.includes(cc));
-          if (hasConflictingColor) {
-            score -= 40;
-          }
-        }
+        const matchesColor = targetColorKeywords.some(kw => {
+          const rx = new RegExp(`(^|[^a-záéíóúñ])${kw}([^a-záéíóúñ]|$)`, "i");
+          return rx.test(lowerTitle);
+        });
+        if (matchesColor) score += 90;
       }
 
+      // Bonificación por coincidencia de Año / Generación
       if (!isNaN(numericYear)) {
         if (lowerTitle.includes(String(numericYear))) {
-          score += 45;
+          score += 80; // Año exacto
         } else {
           for (let dy = -3; dy <= 3; dy++) {
             if (dy !== 0 && lowerTitle.includes(String(numericYear + dy))) {
-              score += 25;
+              score += 45;
               break;
             }
-          }
-          if (numericYear >= 2010 && /199\d|200[0-4]/.test(lowerTitle)) {
-            score -= 45;
           }
         }
       }
@@ -1344,20 +1368,27 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
 
     try {
       const searchTerms = [];
+      // 1. Búsquedas precisas: Marca + Modelo + Color + Año
       if (targetColorKeywords.length > 0) {
-        for (const kw of targetColorKeywords.slice(0, 2)) {
-          searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${kw}`);
+        for (const kw of targetColorKeywords.slice(0, 3)) {
           if (!isNaN(numericYear)) {
-            searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${numericYear} ${kw}`);
+            searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${cleanAnio} ${kw}`);
           }
+          searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${kw}`);
+          searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${kw}`);
         }
       }
+      // 2. Búsquedas por marca, vehículo y año
       if (!isNaN(numericYear)) {
-        searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${numericYear}`);
-        searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${numericYear}`);
+        searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${cleanAnio}`);
+        searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${cleanAnio}`);
       }
+      // 3. Alias por modelo
       searchTerms.push(`"${cleanMarca} ${cleanVehiculo}"`);
-      searchTerms.push(`${cleanMarca} ${cleanVehiculo} car`);
+      if (cleanVehiculo.toLowerCase() === "matiz" && cleanMarca.toLowerCase() === "chevrolet") {
+        searchTerms.push(`"Chevrolet Matiz" M200`);
+        searchTerms.push(`"Matiz G2"`);
+      }
 
       for (const term of searchTerms) {
         const search = new URLSearchParams({
@@ -1365,7 +1396,7 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
           generator: "search",
           gsrsearch: term,
           gsrnamespace: "6",
-          gsrlimit: "20",
+          gsrlimit: "25",
           prop: "imageinfo",
           iiprop: "url",
           iiurlwidth: "800",
@@ -1382,34 +1413,41 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
             evaluateCandidate(title, thumb);
           }
         }
-        const highScoring = Array.from(candidateMap.values()).filter(c => c.score >= 80);
+        const highScoring = Array.from(candidateMap.values()).filter(c => c.score >= 120);
         if (highScoring.length >= 3) break;
       }
     } catch (e) {
       console.warn("Error en búsqueda de imágenes en Wikimedia Commons:", e);
     }
 
+    // Fuente Secundaria: Búsqueda de artículos en Wikipedia (Español e Inglés)
     if (candidateMap.size < 3 && cleanMarca && cleanVehiculo) {
       try {
-        const wikiPages = [`${cleanMarca}_${cleanVehiculo}`, cleanVehiculo, `${cleanVehiculo}_(car)`];
-        for (const wp of wikiPages) {
-          const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wp)}`);
+        const endpoints = [
+          `https://es.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(cleanMarca + " " + cleanVehiculo)}&gsrlimit=8&prop=pageimages&piprop=original|thumbnail&pithumbsize=800&format=json&origin=*`,
+          `https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(cleanMarca + " " + cleanVehiculo)}&gsrlimit=8&prop=pageimages&piprop=original|thumbnail&pithumbsize=800&format=json&origin=*`
+        ];
+        for (const ep of endpoints) {
+          const res = await fetch(ep);
           if (res.ok) {
             const data = await res.json();
-            const originalUrl = data?.originalimage?.source || data?.thumbnail?.source;
-            if (originalUrl) {
-              evaluateCandidate(data.title || wp, originalUrl);
+            const pages = Object.values(data?.query?.pages || {});
+            for (const page of pages) {
+              const imgUrl = page?.thumbnail?.source || page?.original?.source;
+              if (imgUrl) evaluateCandidate(page.title || "", imgUrl);
             }
           }
         }
       } catch (e) {
-        console.warn("Error en Wikipedia Summary API:", e);
+        console.warn("Error en Wikipedia Pageimages API:", e);
       }
     }
 
     const sorted = Array.from(candidateMap.values())
       .sort((a, b) => b.score - a.score)
       .map(c => c.url);
+
+    return sorted.slice(0, 3);
 
     return sorted.slice(0, 3);
   }

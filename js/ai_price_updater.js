@@ -1,7 +1,6 @@
 // ai_price_updater.js - Actualización de Compatibilidad, Precios 3:1 y Demanda Estadística mediante IA
 // Fundamentada estrictamente en manuales de fabricante, catálogos OEM oficiales, relación 3:1 sobre el COSTO y analítica de mercado digital
 
-localStorage.removeItem("yonke_gemini_api_key");
 
 class AIPriceUpdaterManager {
   constructor() {

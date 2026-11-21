@@ -1,9 +1,7 @@
 ﻿// ai_register.js - Registro de Piezas con Gemini Vision API (OEM preciso + precios de mercado)
 
-localStorage.removeItem("yonke_gemini_api_key");
-
 function getGeminiApiKey() {
-  return window.callGeminiProxy ? "server-side" : "";
+  return localStorage.getItem("yonke_gemini_api_key") || (window.callGeminiProxy ? "server-side" : "");
 }
 
 // ---------------------------------------------------------------------------
@@ -310,8 +308,7 @@ class AIRegisterManager {
       console.error("Error Gemini Vision:", err);
 
       if (err.message.includes("401") || err.message.includes("API_KEY")) {
-        localStorage.removeItem("yonke_gemini_api_key");
-        alert("❌ API Key inválida o expirada. Se ha borrado de la memoria. Puedes ingresar una nueva.");
+        alert("❌ La API Key de Google parece inválida o sin permisos. Puedes revisarla o actualizarla en el menú Configuración.");
       } else if (err.message.includes("503") || err.message.includes("UNAVAILABLE") || err.message.includes("429")) {
         alert("⚠️ Los servidores de IA están con alta demanda en este momento.\n\nEspera unos segundos e intenta de nuevo. Si el problema persiste, registra la pieza manualmente.");
       } else {

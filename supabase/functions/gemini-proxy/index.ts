@@ -83,10 +83,17 @@ Deno.serve(async request => {
     } catch {
       return jsonResponse(origin, 400, { error: "Invalid JSON" });
     }
-    const models = new Set(["gemini-3.6-flash"]);
+    const models = new Set(["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.5-flash", "gemini-3.6-flash"]);
     if (typeof payload.model !== "string" || !models.has(payload.model) ||
         !payload.request || !Array.isArray(payload.request.contents)) {
       return jsonResponse(origin, 400, { error: "Invalid AI request" });
+    }
+    // Si la petición contiene imágenes (inlineData), Gemini rechaza tools (googleSearch) con 400
+    const hasInlineData = payload.request.contents.some((c: any) =>
+      Array.isArray(c?.parts) && c.parts.some((p: any) => p?.inlineData)
+    );
+    if (hasInlineData && (payload.request as any).tools) {
+      delete (payload.request as any).tools;
     }
     const upstreamBody = JSON.stringify(payload.request);
     if (!upstreamBody) return jsonResponse(origin, 400, { error: "Invalid AI request" });
