@@ -407,11 +407,26 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
 
     if (statusText) statusText.textContent = "Analizando con Gemini AI y manuales de fabricante...";
 
-    const res = await window.callGeminiProxy("gemini-3.6-flash", {
+    let res = null;
+    try {
+      res = await window.callGeminiProxy("gemini-2.0-flash", {
         contents: [{ parts: partsPayload }],
-        tools: [{ google_search: {} }],
+        tools: [{ googleSearch: {} }],
         generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
-    });
+      });
+      if (!res.ok) {
+        res = await window.callGeminiProxy("gemini-2.0-flash", {
+          contents: [{ parts: partsPayload }],
+          generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
+        });
+      }
+    } catch (proxyErr) {
+      console.warn("Fallo en Gemini con tools, reintentando directo:", proxyErr);
+      res = await window.callGeminiProxy("gemini-2.0-flash", {
+        contents: [{ parts: partsPayload }],
+        generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
+      });
+    }
 
     if (!res.ok) {
       throw new Error(`Gemini API error: ${res.status}`);
@@ -1229,30 +1244,128 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
   }
 
   async findThreeVehicleImages(marca, vehiculo, anio, color = "") {
-    const urls = new Set();
+    const candidateMap = new Map(); // url -> { score, title, url }
     const cleanMarca = (marca || "").trim();
     const cleanVehiculo = (vehiculo || "").trim();
     const cleanAnio = (anio || "").trim();
-    const cleanColor = (color || "").trim();
+    const cleanColor = (color || "").trim().toLowerCase();
+
+    // Diccionario de colores comunes español -> palabras clave en inglés y español
+    const colorDictionary = {
+      "gris": ["gray", "grey", "silver", "gris", "plata"],
+      "plata": ["silver", "gray", "grey", "plata", "gris"],
+      "blanco": ["white", "blanco"],
+      "negro": ["black", "negro"],
+      "rojo": ["red", "rojo", "tinto", "maroon", "crimson"],
+      "azul": ["blue", "azul", "navy"],
+      "verde": ["green", "verde"],
+      "amarillo": ["yellow", "amarillo"],
+      "dorado": ["gold", "golden", "dorado", "beige", "sand", "champagne"],
+      "arena": ["sand", "beige", "tan", "arena", "champagne"],
+      "cafe": ["brown", "cafe", "marron"],
+      "marron": ["brown", "marron"],
+      "naranja": ["orange", "naranja"]
+    };
+
+    let targetColorKeywords = [];
+    if (cleanColor && cleanColor !== "no especificado" && cleanColor !== "por verificar") {
+      for (const [colName, keywords] of Object.entries(colorDictionary)) {
+        if (cleanColor.includes(colName)) {
+          targetColorKeywords.push(...keywords);
+        }
+      }
+      if (targetColorKeywords.length === 0) {
+        targetColorKeywords.push(cleanColor);
+      }
+    }
+    targetColorKeywords = [...new Set(targetColorKeywords)];
+
+    const allColors = ["white", "black", "red", "blue", "green", "yellow", "gold", "orange", "brown", "silver", "gray", "grey", "purple"];
+    const conflictingColors = allColors.filter(c => !targetColorKeywords.includes(c));
+
+    const numericYear = parseInt(cleanAnio, 10);
+
+    const evaluateCandidate = (title, url) => {
+      if (!url || !/^https:\/\//i.test(url)) return;
+      const lowerTitle = (title || "").toLowerCase();
+
+      if (/logo|icon|emblem|badge|diagram|engine|motor|interior|wheel|taillight|headlight|dashboard|speedometer|steering|chassis|seat|door_panel|crash_test/i.test(lowerTitle)) {
+        return;
+      }
+
+      let score = 0;
+      const lowerMarca = cleanMarca.toLowerCase();
+      const lowerVehiculo = cleanVehiculo.toLowerCase();
+
+      if (lowerVehiculo && lowerTitle.includes(lowerVehiculo)) score += 50;
+      if (lowerMarca && lowerTitle.includes(lowerMarca)) score += 30;
+
+      if (lowerMarca && !lowerTitle.includes(lowerMarca)) {
+        if (/daewoo|pontiac|holden|opel|vauxhall/i.test(lowerTitle) && lowerMarca === "chevrolet") {
+          score -= 10;
+        } else if (/ford|nissan|toyota|volkswagen|honda|fiat|renault|peugeot/i.test(lowerTitle)) {
+          score -= 50;
+        }
+      }
+
+      if (targetColorKeywords.length > 0) {
+        const matchesColor = targetColorKeywords.some(kw => lowerTitle.includes(kw));
+        if (matchesColor) {
+          score += 60;
+        } else {
+          const hasConflictingColor = conflictingColors.some(cc => lowerTitle.includes(cc));
+          if (hasConflictingColor) {
+            score -= 40;
+          }
+        }
+      }
+
+      if (!isNaN(numericYear)) {
+        if (lowerTitle.includes(String(numericYear))) {
+          score += 45;
+        } else {
+          for (let dy = -3; dy <= 3; dy++) {
+            if (dy !== 0 && lowerTitle.includes(String(numericYear + dy))) {
+              score += 25;
+              break;
+            }
+          }
+          if (numericYear >= 2010 && /199\d|200[0-4]/.test(lowerTitle)) {
+            score -= 45;
+          }
+        }
+      }
+
+      const existing = candidateMap.get(url);
+      if (!existing || existing.score < score) {
+        candidateMap.set(url, { score, title: lowerTitle, url });
+      }
+    };
 
     try {
       const searchTerms = [];
-      if (cleanColor && cleanColor !== "No especificado" && cleanColor !== "Por verificar") {
-        searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${cleanColor}`);
-        searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${cleanAnio} ${cleanColor}`);
+      if (targetColorKeywords.length > 0) {
+        for (const kw of targetColorKeywords.slice(0, 2)) {
+          searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${kw}`);
+          if (!isNaN(numericYear)) {
+            searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${numericYear} ${kw}`);
+          }
+        }
       }
-      searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${cleanAnio}`);
+      if (!isNaN(numericYear)) {
+        searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${numericYear}`);
+        searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${numericYear}`);
+      }
       searchTerms.push(`"${cleanMarca} ${cleanVehiculo}"`);
-      searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${cleanAnio} vehicle`);
+      searchTerms.push(`${cleanMarca} ${cleanVehiculo} car`);
 
       for (const term of searchTerms) {
-        if (urls.size >= 3) break;
         const search = new URLSearchParams({
           action: "query",
           generator: "search",
           gsrsearch: term,
           gsrnamespace: "6",
-          gsrlimit: "15",
+          gsrlimit: "20",
           prop: "imageinfo",
           iiprop: "url",
           iiurlwidth: "800",
@@ -1264,32 +1377,28 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
           const data = await response.json();
           const pages = Object.values(data?.query?.pages || {});
           for (const page of pages) {
-            const title = (page.title || "").toLowerCase();
+            const title = page.title || "";
             const thumb = page?.imageinfo?.[0]?.thumburl || page?.imageinfo?.[0]?.url;
-            const matchesMarca = cleanMarca ? title.includes(cleanMarca.toLowerCase()) : true;
-            const matchesVehiculo = cleanVehiculo ? title.includes(cleanVehiculo.toLowerCase()) : true;
-            if (thumb && /^https:\/\//i.test(thumb) && (matchesMarca || matchesVehiculo)) {
-              urls.add(thumb);
-              if (urls.size >= 3) break;
-            }
+            evaluateCandidate(title, thumb);
           }
         }
+        const highScoring = Array.from(candidateMap.values()).filter(c => c.score >= 80);
+        if (highScoring.length >= 3) break;
       }
     } catch (e) {
       console.warn("Error en búsqueda de imágenes en Wikimedia Commons:", e);
     }
 
-    if (urls.size < 3 && cleanMarca && cleanVehiculo) {
+    if (candidateMap.size < 3 && cleanMarca && cleanVehiculo) {
       try {
-        const wikiPages = [`${cleanMarca}_${cleanVehiculo}`, cleanVehiculo];
+        const wikiPages = [`${cleanMarca}_${cleanVehiculo}`, cleanVehiculo, `${cleanVehiculo}_(car)`];
         for (const wp of wikiPages) {
-          if (urls.size >= 3) break;
           const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wp)}`);
           if (res.ok) {
             const data = await res.json();
             const originalUrl = data?.originalimage?.source || data?.thumbnail?.source;
-            if (originalUrl && /^https:\/\//i.test(originalUrl)) {
-              urls.add(originalUrl);
+            if (originalUrl) {
+              evaluateCandidate(data.title || wp, originalUrl);
             }
           }
         }
@@ -1298,7 +1407,11 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
       }
     }
 
-    return Array.from(urls).slice(0, 3);
+    const sorted = Array.from(candidateMap.values())
+      .sort((a, b) => b.score - a.score)
+      .map(c => c.url);
+
+    return sorted.slice(0, 3);
   }
 
   selectMainVehiclePhoto(url) {
@@ -1887,6 +2000,21 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
     if (modal) modal.classList.add("hidden");
   }
 
+  useCustomPhotoUrl() {
+    const input = document.getElementById("valuator-custom-photo-input");
+    const url = input ? input.value.trim() : "";
+    if (!url || !url.startsWith("http")) {
+      alert("Por favor ingresa una URL válida (ej: https://...)");
+      return;
+    }
+    this.selectedVehicleMainImage = url;
+    this.referenceImageUrl = url;
+    if (!this.suggestedImages.includes(url)) {
+      this.suggestedImages.unshift(url);
+    }
+    this.renderMainPhotoOptions();
+  }
+
   confirmMainPhotoAndRegister() {
     this.closeSelectMainPhotoModal();
     const costo = this._pendingCostoCompra;
@@ -1894,6 +2022,8 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
   }
 
   completeBuyAndRegister(costoCompra) {
+    this.readFormInputs();
+    const model = this.currentModelName || `${this.marca} ${this.vehiculo} ${this.anio} ${this.motor}`.trim();
 
     const vinInput = prompt("Introduce el número de serie / VIN o placas del vehículo (opcional):", "") || "";
 

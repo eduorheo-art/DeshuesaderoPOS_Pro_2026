@@ -115,7 +115,7 @@ class AIPriceUpdaterManager {
       const prompt = `Revisa los registros del inventario con Google Search. Para PRECIO consulta publicaciones vigentes de piezas usadas OEM en México. Para COMPATIBILIDAD consulta documentación y catálogos oficiales OEM del año/modelo; no infieras compatibilidad. Estima demanda Alta/Media/Baja solo cuando haya evidencia de mercado. Devuelve únicamente JSON válido como array con los mismos id y campos: {"id":"...","precio_base":0,"precio_fuente":"URL","demanda":"Alta|Media|Baja","busquedas_info":"estimación y periodo","demanda_fuente":"URL","compatibilidad":"...","compatibilidad_fuente":"URL"}. Deja un campo vacío si no puedes respaldarlo con su fuente. No propongas datos sin evidencia.\nInventario: ${JSON.stringify(inventory)}`;
       const response = await window.callGeminiProxy("gemini-3.6-flash", {
           contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ google_search: {} }],
+          tools: [{ googleSearch: {} }],
           generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
       });
       if (!response.ok) throw new Error(`Gemini inventory review failed: ${response.status}`);

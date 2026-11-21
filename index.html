@@ -2726,6 +2726,11 @@
             <!-- Dinámico -->
           </div>
         </div>
+
+        <div class="pt-2 border-t border-slate-100 flex items-center gap-2">
+          <input type="text" id="valuator-custom-photo-input" placeholder="O pega el enlace de otra imagen (URL)..." class="flex-1 px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 font-medium"/>
+          <button type="button" onclick="window.vehicleValuatorManager.useCustomPhotoUrl()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg transition whitespace-nowrap cursor-pointer">Usar URL</button>
+        </div>
       </div>
 
       <div class="mt-5 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
@@ -7554,11 +7559,27 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
 
     if (statusText) statusText.textContent = "Analizando con Gemini AI y manuales de fabricante...";
 
-    const res = await window.callGeminiProxy("gemini-2.0-flash", {
+    let res = null;
+    try {
+      res = await window.callGeminiProxy("gemini-2.0-flash", {
         contents: [{ parts: partsPayload }],
-        tools: [{ google_search: {} }],
+        tools: [{ googleSearch: {} }],
         generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
-    });
+      });
+      if (!res.ok) {
+        // Si hay error en proxy con tools, reintentar sin tools
+        res = await window.callGeminiProxy("gemini-2.0-flash", {
+          contents: [{ parts: partsPayload }],
+          generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
+        });
+      }
+    } catch (proxyErr) {
+      console.warn("Fallo en Gemini con tools, reintentando directo:", proxyErr);
+      res = await window.callGeminiProxy("gemini-2.0-flash", {
+        contents: [{ parts: partsPayload }],
+        generationConfig: { maxOutputTokens: 8192, temperature: 0.2 }
+      });
+    }
 
     if (!res.ok) {
       throw new Error(`Gemini API error: ${res.status}`);
@@ -8345,30 +8366,139 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
   }
 
   async findThreeVehicleImages(marca, vehiculo, anio, color = "") {
-    const urls = new Set();
+    const candidateMap = new Map(); // url -> { score, title, url }
     const cleanMarca = (marca || "").trim();
     const cleanVehiculo = (vehiculo || "").trim();
     const cleanAnio = (anio || "").trim();
-    const cleanColor = (color || "").trim();
+    const cleanColor = (color || "").trim().toLowerCase();
+
+    // Diccionario de colores comunes español -> palabras clave en inglés y español
+    const colorDictionary = {
+      "gris": ["gray", "grey", "silver", "gris", "plata"],
+      "plata": ["silver", "gray", "grey", "plata", "gris"],
+      "blanco": ["white", "blanco"],
+      "negro": ["black", "negro"],
+      "rojo": ["red", "rojo", "tinto", "maroon", "crimson"],
+      "azul": ["blue", "azul", "navy"],
+      "verde": ["green", "verde"],
+      "amarillo": ["yellow", "amarillo"],
+      "dorado": ["gold", "golden", "dorado", "beige", "sand", "champagne"],
+      "arena": ["sand", "beige", "tan", "arena", "champagne"],
+      "cafe": ["brown", "cafe", "marron"],
+      "marron": ["brown", "marron"],
+      "naranja": ["orange", "naranja"]
+    };
+
+    let targetColorKeywords = [];
+    if (cleanColor && cleanColor !== "no especificado" && cleanColor !== "por verificar") {
+      for (const [colName, keywords] of Object.entries(colorDictionary)) {
+        if (cleanColor.includes(colName)) {
+          targetColorKeywords.push(...keywords);
+        }
+      }
+      if (targetColorKeywords.length === 0) {
+        targetColorKeywords.push(cleanColor);
+      }
+    }
+    targetColorKeywords = [...new Set(targetColorKeywords)];
+
+    const allColors = ["white", "black", "red", "blue", "green", "yellow", "gold", "orange", "brown", "silver", "gray", "grey", "purple"];
+    const conflictingColors = allColors.filter(c => !targetColorKeywords.includes(c));
+
+    const numericYear = parseInt(cleanAnio, 10);
+
+    const evaluateCandidate = (title, url) => {
+      if (!url || !/^https:\/\//i.test(url)) return;
+      const lowerTitle = (title || "").toLowerCase();
+
+      // Descartar fotos que no sean del auto completo
+      if (/logo|icon|emblem|badge|diagram|engine|motor|interior|wheel|taillight|headlight|dashboard|speedometer|steering|chassis|seat|door_panel|crash_test/i.test(lowerTitle)) {
+        return;
+      }
+
+      let score = 0;
+      const lowerMarca = cleanMarca.toLowerCase();
+      const lowerVehiculo = cleanVehiculo.toLowerCase();
+
+      // Coincidencia de marca y vehículo
+      if (lowerVehiculo && lowerTitle.includes(lowerVehiculo)) score += 50;
+      if (lowerMarca && lowerTitle.includes(lowerMarca)) score += 30;
+
+      // Penalizar marcas ajenas
+      if (lowerMarca && !lowerTitle.includes(lowerMarca)) {
+        if (/daewoo|pontiac|holden|opel|vauxhall/i.test(lowerTitle) && lowerMarca === "chevrolet") {
+          score -= 10;
+        } else if (/ford|nissan|toyota|volkswagen|honda|fiat|renault|peugeot/i.test(lowerTitle)) {
+          score -= 50;
+        }
+      }
+
+      // Coincidencia de Color
+      if (targetColorKeywords.length > 0) {
+        const matchesColor = targetColorKeywords.some(kw => lowerTitle.includes(kw));
+        if (matchesColor) {
+          score += 60; // Gran impulso por coincidir en color
+        } else {
+          // Penalizar si el título explícitamente tiene otro color distinto
+          const hasConflictingColor = conflictingColors.some(cc => lowerTitle.includes(cc));
+          if (hasConflictingColor) {
+            score -= 40;
+          }
+        }
+      }
+
+      // Coincidencia de Año / Generación
+      if (!isNaN(numericYear)) {
+        if (lowerTitle.includes(String(numericYear))) {
+          score += 45; // Año exacto
+        } else {
+          // Años cercanos (±3 años de la misma generación)
+          for (let dy = -3; dy <= 3; dy++) {
+            if (dy !== 0 && lowerTitle.includes(String(numericYear + dy))) {
+              score += 25;
+              break;
+            }
+          }
+          // Si el año es muy viejo (ej: 1998 para un 2012)
+          if (numericYear >= 2010 && /199\d|200[0-4]/.test(lowerTitle)) {
+            score -= 45;
+          }
+        }
+      }
+
+      const existing = candidateMap.get(url);
+      if (!existing || existing.score < score) {
+        candidateMap.set(url, { score, title: lowerTitle, url });
+      }
+    };
 
     try {
       const searchTerms = [];
-      if (cleanColor && cleanColor !== "No especificado" && cleanColor !== "Por verificar") {
-        searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${cleanColor}`);
-        searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${cleanAnio} ${cleanColor}`);
+      // 1. Búsquedas priorizando vehículo + color en inglés
+      if (targetColorKeywords.length > 0) {
+        for (const kw of targetColorKeywords.slice(0, 2)) {
+          searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${kw}`);
+          if (!isNaN(numericYear)) {
+            searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${numericYear} ${kw}`);
+          }
+        }
       }
-      searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${cleanAnio}`);
+      // 2. Búsquedas por marca, vehículo y año
+      if (!isNaN(numericYear)) {
+        searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${numericYear}`);
+        searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${numericYear}`);
+      }
+      // 3. Búsqueda por modelo general
       searchTerms.push(`"${cleanMarca} ${cleanVehiculo}"`);
-      searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${cleanAnio} vehicle`);
+      searchTerms.push(`${cleanMarca} ${cleanVehiculo} car`);
 
       for (const term of searchTerms) {
-        if (urls.size >= 3) break;
         const search = new URLSearchParams({
           action: "query",
           generator: "search",
           gsrsearch: term,
           gsrnamespace: "6",
-          gsrlimit: "15",
+          gsrlimit: "20",
           prop: "imageinfo",
           iiprop: "url",
           iiurlwidth: "800",
@@ -8380,32 +8510,28 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
           const data = await response.json();
           const pages = Object.values(data?.query?.pages || {});
           for (const page of pages) {
-            const title = (page.title || "").toLowerCase();
+            const title = page.title || "";
             const thumb = page?.imageinfo?.[0]?.thumburl || page?.imageinfo?.[0]?.url;
-            const matchesMarca = cleanMarca ? title.includes(cleanMarca.toLowerCase()) : true;
-            const matchesVehiculo = cleanVehiculo ? title.includes(cleanVehiculo.toLowerCase()) : true;
-            if (thumb && /^https:\/\//i.test(thumb) && (matchesMarca || matchesVehiculo)) {
-              urls.add(thumb);
-              if (urls.size >= 3) break;
-            }
+            evaluateCandidate(title, thumb);
           }
         }
+        const highScoring = Array.from(candidateMap.values()).filter(c => c.score >= 80);
+        if (highScoring.length >= 3) break;
       }
     } catch (e) {
       console.warn("Error en búsqueda de imágenes en Wikimedia Commons:", e);
     }
 
-    if (urls.size < 3 && cleanMarca && cleanVehiculo) {
+    if (candidateMap.size < 3 && cleanMarca && cleanVehiculo) {
       try {
-        const wikiPages = [`${cleanMarca}_${cleanVehiculo}`, cleanVehiculo];
+        const wikiPages = [`${cleanMarca}_${cleanVehiculo}`, cleanVehiculo, `${cleanVehiculo}_(car)`];
         for (const wp of wikiPages) {
-          if (urls.size >= 3) break;
           const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wp)}`);
           if (res.ok) {
             const data = await res.json();
             const originalUrl = data?.originalimage?.source || data?.thumbnail?.source;
-            if (originalUrl && /^https:\/\//i.test(originalUrl)) {
-              urls.add(originalUrl);
+            if (originalUrl) {
+              evaluateCandidate(data.title || wp, originalUrl);
             }
           }
         }
@@ -8414,7 +8540,11 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
       }
     }
 
-    return Array.from(urls).slice(0, 3);
+    const sorted = Array.from(candidateMap.values())
+      .sort((a, b) => b.score - a.score)
+      .map(c => c.url);
+
+    return sorted.slice(0, 3);
   }
 
   selectMainVehiclePhoto(url) {
@@ -9000,6 +9130,21 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
     }
   }
 
+  useCustomPhotoUrl() {
+    const input = document.getElementById("valuator-custom-photo-input");
+    const url = input ? input.value.trim() : "";
+    if (!url || !url.startsWith("http")) {
+      alert("Por favor ingresa una URL válida (ej: https://...)");
+      return;
+    }
+    this.selectedVehicleMainImage = url;
+    this.referenceImageUrl = url;
+    if (!this.suggestedImages.includes(url)) {
+      this.suggestedImages.unshift(url);
+    }
+    this.renderMainPhotoOptions();
+  }
+
   selectMainVehiclePhotoModal(url) {
     if (!url) return;
     this.selectedVehicleMainImage = url;
@@ -9019,6 +9164,8 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
   }
 
   completeBuyAndRegister(costoCompra) {
+    this.readFormInputs();
+    const model = this.currentModelName || `${this.marca} ${this.vehiculo} ${this.anio} ${this.motor}`.trim();
 
     const vinInput = prompt("Introduce el número de serie / VIN o placas del vehículo (opcional):", "") || "";
 
@@ -11019,7 +11166,7 @@ class AIPriceUpdaterManager {
       const prompt = `Revisa los registros del inventario con Google Search. Para PRECIO consulta publicaciones vigentes de piezas usadas OEM en México. Para COMPATIBILIDAD consulta documentación y catálogos oficiales OEM del año/modelo; no infieras compatibilidad. Estima demanda Alta/Media/Baja solo cuando haya evidencia de mercado. Devuelve únicamente JSON válido como array con los mismos id y campos: {"id":"...","precio_base":0,"precio_fuente":"URL","demanda":"Alta|Media|Baja","busquedas_info":"estimación y periodo","demanda_fuente":"URL","compatibilidad":"...","compatibilidad_fuente":"URL"}. Deja un campo vacío si no puedes respaldarlo con su fuente. No propongas datos sin evidencia.\nInventario: ${JSON.stringify(inventory)}`;
       const response = await window.callGeminiProxy("gemini-2.0-flash", {
           contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ google_search: {} }],
+          tools: [{ googleSearch: {} }],
           generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
       });
       if (!response.ok) {
@@ -11462,7 +11609,7 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
     try {
       const response = await window.callGeminiProxy("gemini-2.5-flash", {
         contents: [{ parts: [{ text: prompt }] }],
-        tools: [{ google_search: {} }],
+        tools: [{ googleSearch: {} }],
         generationConfig: { maxOutputTokens: 256, temperature: 0.1 }
       });
       if (!response.ok) return "";
