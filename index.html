@@ -1674,13 +1674,13 @@
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
               <span>Color Exterior</span>
-              <span class="text-[10px] text-blue-600 font-semibold">(IA / Manual)</span>
+              <span class="text-[10px] text-slate-500 font-semibold">(Manual)</span>
             </label>
             <input 
               type="text" 
               id="valuator-color-input" 
               value=""
-              placeholder="Detectado por IA o escribe..." 
+              placeholder="Escribe el color (ej: Blanco, Rojo, Plata)..." 
               class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -1721,12 +1721,13 @@
               <span>📸</span> Inspección Fotográfica del Vehículo (5 Zonas Clave)
             </h3>
             <p class="text-xs text-slate-500">
-              Captura fotos de Frente, ambos Costados, Trasera e Interior. La IA detectará zonas chocadas y pre-marcará las piezas destruidas.
+              Captura fotos de Frente, ambos Costados, Trasera e Interior para la galería del vehículo.
             </p>
           </div>
+          <!-- [PAUSADO] Inspección de daños con IA — Oculto visualmente pero disponible para reactivación futura -->
           <button 
             id="valuator-ai-scan-btn"
-            class="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-2 active:scale-95 cursor-pointer"
+            class="hidden px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-2 active:scale-95 cursor-pointer"
           >
             <span>🤖</span>
             <span>Inspeccionar Daños con IA (Gemini Vision)</span>
@@ -2689,6 +2690,60 @@
       <p id="valuator-ai-status-text" class="text-xs text-slate-500 my-4">Analizando fotos de carrocería y mecánica...</p>
       <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-2">
         <div class="bg-indigo-600 h-full w-2/3 animate-pulse"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SELECCIÓN DE FOTO PRINCIPAL TRAS TRATO HECHO (3 IMÁGENES SEGÚN COLOR) -->
+  <div id="valuator-main-photo-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 my-8">
+      <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+            <span>📸</span> Foto Principal del Vehículo
+          </h3>
+          <p id="valuator-photo-modal-subtitle" class="text-xs text-slate-500 mt-0.5">Elige la foto para el catálogo y botones del Mostrador.</p>
+        </div>
+        <button type="button" onclick="window.vehicleValuatorManager.closeSelectMainPhotoModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold p-1">✕</button>
+      </div>
+
+      <div id="valuator-photo-modal-loading" class="py-8 text-center text-xs text-slate-500">
+        <div class="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+        <p class="font-bold text-slate-700">Obteniendo 3 imágenes oficiales de referencia según el color...</p>
+      </div>
+
+      <div id="valuator-photo-modal-content" class="hidden space-y-4">
+        <p class="text-xs text-slate-600">
+          Elige una de las <strong>3 imágenes oficiales de referencia</strong> para mostrarla en los botones de Vehículos:
+        </p>
+        <div id="valuator-photo-modal-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <!-- Dinámico -->
+        </div>
+
+        <div id="valuator-photo-modal-captured-container" class="hidden pt-3 border-t border-slate-100">
+          <p class="text-[11px] font-bold text-slate-500 mb-2">O elige una de las fotos capturadas en la inspección:</p>
+          <div id="valuator-photo-modal-captured-grid" class="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            <!-- Dinámico -->
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+        <button 
+          type="button" 
+          onclick="window.vehicleValuatorManager.closeSelectMainPhotoModal()"
+          class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button 
+          type="button" 
+          id="valuator-photo-modal-confirm-btn"
+          onclick="window.vehicleValuatorManager.confirmMainPhotoAndRegister()"
+          class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow transition cursor-pointer"
+        >
+          ✅ Confirmar e Ingresar a Inventario
+        </button>
       </div>
     </div>
   </div>
@@ -8294,13 +8349,17 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
     const cleanMarca = (marca || "").trim();
     const cleanVehiculo = (vehiculo || "").trim();
     const cleanAnio = (anio || "").trim();
+    const cleanColor = (color || "").trim();
 
     try {
-      const searchTerms = [
-        `"${cleanMarca} ${cleanVehiculo}" ${cleanAnio}`,
-        `"${cleanMarca} ${cleanVehiculo}"`,
-        `${cleanMarca} ${cleanVehiculo} ${cleanAnio} vehicle`
-      ];
+      const searchTerms = [];
+      if (cleanColor && cleanColor !== "No especificado" && cleanColor !== "Por verificar") {
+        searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${cleanColor}`);
+        searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${cleanAnio} ${cleanColor}`);
+      }
+      searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${cleanAnio}`);
+      searchTerms.push(`"${cleanMarca} ${cleanVehiculo}"`);
+      searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${cleanAnio} vehicle`);
 
       for (const term of searchTerms) {
         if (urls.size >= 3) break;
@@ -8807,7 +8866,7 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
   }
 
   // --- TRATO HECHO: ALTA EN PATIO E INVENTARIO CON REGLAS DE PRECIO (BASE MÁS ALTO Y MÍNIMO 3:1) ---
-  buyAndRegisterToInventory() {
+  async buyAndRegisterToInventory() {
     this.readFormInputs();
     const model = this.currentModelName || `${this.marca} ${this.vehiculo} ${this.anio} ${this.motor}`.trim();
 
@@ -8838,6 +8897,128 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       alert("Por favor ingresa un monto final acordado válido mayor a cero para completar el registro.");
       return;
     }
+
+    this._pendingCostoCompra = costoCompra;
+
+    // Desplegar la función de las 3 imágenes para elegir foto principal si y solo si se dio clic en Trato Hecho
+    await this.openSelectMainPhotoModal();
+  }
+
+  async openSelectMainPhotoModal() {
+    const modal = document.getElementById("valuator-main-photo-modal");
+    if (!modal) {
+      this.completeBuyAndRegister(this._pendingCostoCompra);
+      return;
+    }
+
+    const colorInput = document.getElementById("valuator-color-input");
+    const colorFinal = (colorInput && colorInput.value.trim()) || (this.vehicleColor && this.vehicleColor !== "Por verificar" ? this.vehicleColor : "No especificado");
+    this.vehicleColor = colorFinal;
+
+    const subtitleEl = document.getElementById("valuator-photo-modal-subtitle");
+    if (subtitleEl) {
+      subtitleEl.innerHTML = `Vehículo: <strong class="text-slate-800">${this.marca} ${this.vehiculo} ${this.anio}</strong> | Color: <strong class="text-blue-600">${colorFinal}</strong>`;
+    }
+
+    const loadingEl = document.getElementById("valuator-photo-modal-loading");
+    const contentEl = document.getElementById("valuator-photo-modal-content");
+
+    modal.classList.remove("hidden");
+    if (loadingEl) loadingEl.classList.remove("hidden");
+    if (contentEl) contentEl.classList.add("hidden");
+
+    try {
+      this.suggestedImages = await this.findThreeVehicleImages(this.marca, this.vehiculo, this.anio, colorFinal);
+    } catch (e) {
+      console.warn("Error al buscar las 3 imágenes de referencia:", e);
+      this.suggestedImages = [];
+    }
+
+    if (this.suggestedImages.length > 0 && !this.selectedVehicleMainImage) {
+      this.selectedVehicleMainImage = this.suggestedImages[0];
+    } else if (!this.selectedVehicleMainImage && this.photos.frente) {
+      this.selectedVehicleMainImage = this.photos.frente;
+    }
+
+    if (loadingEl) loadingEl.classList.add("hidden");
+    if (contentEl) contentEl.classList.remove("hidden");
+
+    this.renderMainPhotoOptions();
+  }
+
+  renderMainPhotoOptions() {
+    const gridEl = document.getElementById("valuator-photo-modal-grid");
+    if (!gridEl) return;
+
+    if (this.suggestedImages.length === 0) {
+      gridEl.innerHTML = `
+        <div class="col-span-1 sm:col-span-3 text-center py-4 text-xs text-amber-800 bg-amber-50 rounded-xl border border-amber-200">
+          No se encontraron imágenes en línea para este modelo y color. Puedes elegir una de las fotos capturadas abajo o confirmar.
+        </div>
+      `;
+    } else {
+      gridEl.innerHTML = this.suggestedImages.map((imgUrl, i) => {
+        const isSelected = imgUrl === this.selectedVehicleMainImage;
+        return `
+          <div class="val-photo-option-card flex flex-col bg-white rounded-xl border-2 ${isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-slate-200'} p-2 shadow-sm transition cursor-pointer relative"
+               onclick="window.vehicleValuatorManager.selectMainVehiclePhotoModal('${imgUrl}')">
+            <div class="relative h-28 w-full rounded-lg overflow-hidden bg-slate-100 mb-2">
+              <img src="${imgUrl}" alt="Opción ${i + 1}" class="w-full h-full object-cover">
+              ${isSelected ? '<span class="absolute top-1.5 right-1.5 bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow">✓ Seleccionada</span>' : ''}
+            </div>
+            <div class="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1.5">
+              <span>Opción ${i + 1}</span>
+              <span class="text-[10px] text-emerald-600 font-extrabold">Catálogo</span>
+            </div>
+            <button type="button" class="w-full py-1.5 px-2 rounded-lg text-xs ${isSelected ? 'font-bold bg-emerald-600 text-white shadow-sm' : 'font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700'}">
+              ${isSelected ? '✓ Seleccionada' : 'Elegir'}
+            </button>
+          </div>
+        `;
+      }).join("");
+    }
+
+    const capturedContainer = document.getElementById("valuator-photo-modal-captured-container");
+    const capturedGrid = document.getElementById("valuator-photo-modal-captured-grid");
+    const capturedList = Object.entries(this.photos).filter(([_, p]) => Boolean(p));
+    if (capturedContainer && capturedGrid) {
+      if (capturedList.length > 0) {
+        capturedContainer.classList.remove("hidden");
+        capturedGrid.innerHTML = capturedList.map(([zone, photoUrl]) => {
+          const isSelected = photoUrl === this.selectedVehicleMainImage;
+          return `
+            <div class="relative rounded-lg border-2 ${isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-slate-200'} overflow-hidden cursor-pointer h-16 bg-slate-100"
+                 onclick="window.vehicleValuatorManager.selectMainVehiclePhotoModal('${photoUrl}')">
+              <img src="${photoUrl}" class="w-full h-full object-cover"/>
+              ${isSelected ? '<span class="absolute top-1 right-1 bg-emerald-600 text-white text-[8px] font-bold px-1 rounded">✓</span>' : ''}
+            </div>
+          `;
+        }).join("");
+      } else {
+        capturedContainer.classList.add("hidden");
+      }
+    }
+  }
+
+  selectMainVehiclePhotoModal(url) {
+    if (!url) return;
+    this.selectedVehicleMainImage = url;
+    this.referenceImageUrl = url;
+    this.renderMainPhotoOptions();
+  }
+
+  closeSelectMainPhotoModal() {
+    const modal = document.getElementById("valuator-main-photo-modal");
+    if (modal) modal.classList.add("hidden");
+  }
+
+  confirmMainPhotoAndRegister() {
+    this.closeSelectMainPhotoModal();
+    const costo = this._pendingCostoCompra;
+    this.completeBuyAndRegister(costo);
+  }
+
+  completeBuyAndRegister(costoCompra) {
 
     const vinInput = prompt("Introduce el número de serie / VIN o placas del vehículo (opcional):", "") || "";
 
@@ -10757,23 +10938,31 @@ class AIPriceUpdaterManager {
     if (this.backgroundCheckStarted) return;
     this.backgroundCheckStarted = true;
     this.showPendingBackgroundNotice();
+    // No ejecutar revisión automática si se abre desde file:// (CORS bloqueado)
+    if (location.protocol === "file:") return;
     const check = () => {
       if (!document.hidden) this.checkInventoryForUpdates().catch((error) => {
-        console.error("Error al revisar actualizaciones del inventario:", error);
-        const detail = error instanceof TypeError
-          ? `no se pudo conectar con gemini-proxy desde ${location.origin}; verifica que la función esté desplegada y que YONKE_ALLOWED_ORIGINS incluya exactamente ese origen`
-          : error.message;
-        this.reportBackgroundStatus(`No se pudo consultar actualizaciones con IA: ${detail}`);
+        // Solo registrar en consola — NO mostrar toast al usuario por errores automáticos
+        console.warn("Revisión automática de inventario omitida:", error.message);
       });
     };
-    check();
+    // Primera ejecución con retraso de 10 segundos para no bloquear el arranque
+    setTimeout(check, 10000);
     window.setInterval(check, 24 * 60 * 60 * 1000);
-    document.addEventListener("visibilitychange", check);
-    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) setTimeout(check, 2000);
+    });
   }
 
   async checkInventoryForUpdates() {
     if (this.backgroundCheckPromise || Date.now() < this.nextBackgroundRetryAt) return;
+    // Omitir si no hay sesión activa (evita llamadas 401/400 en arranque)
+    if (window.yonkeSupabaseClient) {
+      try {
+        const { data } = await window.yonkeSupabaseClient.auth.getSession();
+        if (!data?.session) return;
+      } catch (_) { return; }
+    }
     const pending = JSON.parse(localStorage.getItem(this.ownerStorageKey("inventory_update_pending")) || "[]");
     if (pending.length) {
       this.backgroundProposals = pending;
@@ -10783,12 +10972,8 @@ class AIPriceUpdaterManager {
 
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
-      console.warn("Revisión diaria de inventario omitida: configura el proxy seguro de Gemini.");
-      if (!this.missingApiKeyNoticeShown) {
-        this.reportBackgroundStatus("La revisión automática requiere configurar el proxy seguro de Gemini.");
-        this.missingApiKeyNoticeShown = true;
-      }
-      return;
+      console.warn("Revisión diaria de inventario omitida: proxy seguro de Gemini no disponible.");
+      return; // silencioso — no mostrar toast al usuario
     }
 
     const lastCheck = Number(localStorage.getItem(this.ownerStorageKey("inventory_update_last_check")) || 0);
@@ -10837,7 +11022,15 @@ class AIPriceUpdaterManager {
           tools: [{ google_search: {} }],
           generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
       });
-      if (!response.ok) throw new Error(`Gemini inventory review failed: ${response.status}`);
+      if (!response.ok) {
+        if (response.status === 429 || response.status === 503) {
+          // Alta demanda: reintentar en 2 horas, sin toast al usuario
+          this.nextBackgroundRetryAt = Date.now() + 2 * 60 * 60 * 1000;
+          console.warn(`Revisión de inventario aplazada (${response.status}): reintentará en 2 horas.`);
+          return [];
+        }
+        throw new Error(`Gemini inventory review failed: ${response.status}`);
+      }
       const data = await response.json();
       const candidate = data?.candidates?.[0];
       const rawText = (candidate?.content?.parts || []).map((part) => part.text || "").join("").replace(/```json/gi, "").replace(/```/g, "").trim();
@@ -11557,7 +11750,8 @@ class AppManager {
 
     // 1. Inicializar base de datos
     await window.yonkeDB.init();
-    if (window.aiPriceUpdaterManager) window.aiPriceUpdaterManager.initializeBackgroundChecks();
+    // [PAUSADO] Revisión automática de precios con IA — reactivar cuando sea necesario:
+    // if (window.aiPriceUpdaterManager) window.aiPriceUpdaterManager.initializeBackgroundChecks();
 
     // 2. Inicializar subsistemas
     this.initializeInventoryFilters();

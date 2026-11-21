@@ -1233,13 +1233,17 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
     const cleanMarca = (marca || "").trim();
     const cleanVehiculo = (vehiculo || "").trim();
     const cleanAnio = (anio || "").trim();
+    const cleanColor = (color || "").trim();
 
     try {
-      const searchTerms = [
-        `"${cleanMarca} ${cleanVehiculo}" ${cleanAnio}`,
-        `"${cleanMarca} ${cleanVehiculo}"`,
-        `${cleanMarca} ${cleanVehiculo} ${cleanAnio} vehicle`
-      ];
+      const searchTerms = [];
+      if (cleanColor && cleanColor !== "No especificado" && cleanColor !== "Por verificar") {
+        searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${cleanColor}`);
+        searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${cleanAnio} ${cleanColor}`);
+      }
+      searchTerms.push(`"${cleanMarca} ${cleanVehiculo}" ${cleanAnio}`);
+      searchTerms.push(`"${cleanMarca} ${cleanVehiculo}"`);
+      searchTerms.push(`${cleanMarca} ${cleanVehiculo} ${cleanAnio} vehicle`);
 
       for (const term of searchTerms) {
         if (urls.size >= 3) break;
@@ -1737,7 +1741,7 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
   }
 
   // --- TRATO HECHO: ALTA EN PATIO E INVENTARIO CON REGLAS DE PRECIO (BASE MÁS ALTO Y MÍNIMO 3:1) ---
-  buyAndRegisterToInventory() {
+  async buyAndRegisterToInventory() {
     this.readFormInputs();
     const model = this.currentModelName || `${this.marca} ${this.vehiculo} ${this.anio} ${this.motor}`.trim();
 
@@ -1768,6 +1772,128 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       alert("Por favor ingresa un monto final acordado válido mayor a cero para completar el registro.");
       return;
     }
+
+    this._pendingCostoCompra = costoCompra;
+
+    // Desplegar la función de las 3 imágenes para elegir foto principal si y solo si se dio clic en Trato Hecho
+    await this.openSelectMainPhotoModal();
+  }
+
+  async openSelectMainPhotoModal() {
+    const modal = document.getElementById("valuator-main-photo-modal");
+    if (!modal) {
+      this.completeBuyAndRegister(this._pendingCostoCompra);
+      return;
+    }
+
+    const colorInput = document.getElementById("valuator-color-input");
+    const colorFinal = (colorInput && colorInput.value.trim()) || (this.vehicleColor && this.vehicleColor !== "Por verificar" ? this.vehicleColor : "No especificado");
+    this.vehicleColor = colorFinal;
+
+    const subtitleEl = document.getElementById("valuator-photo-modal-subtitle");
+    if (subtitleEl) {
+      subtitleEl.innerHTML = `Vehículo: <strong class="text-slate-800">${this.marca} ${this.vehiculo} ${this.anio}</strong> | Color: <strong class="text-blue-600">${colorFinal}</strong>`;
+    }
+
+    const loadingEl = document.getElementById("valuator-photo-modal-loading");
+    const contentEl = document.getElementById("valuator-photo-modal-content");
+
+    modal.classList.remove("hidden");
+    if (loadingEl) loadingEl.classList.remove("hidden");
+    if (contentEl) contentEl.classList.add("hidden");
+
+    try {
+      this.suggestedImages = await this.findThreeVehicleImages(this.marca, this.vehiculo, this.anio, colorFinal);
+    } catch (e) {
+      console.warn("Error al buscar las 3 imágenes de referencia:", e);
+      this.suggestedImages = [];
+    }
+
+    if (this.suggestedImages.length > 0 && !this.selectedVehicleMainImage) {
+      this.selectedVehicleMainImage = this.suggestedImages[0];
+    } else if (!this.selectedVehicleMainImage && this.photos.frente) {
+      this.selectedVehicleMainImage = this.photos.frente;
+    }
+
+    if (loadingEl) loadingEl.classList.add("hidden");
+    if (contentEl) contentEl.classList.remove("hidden");
+
+    this.renderMainPhotoOptions();
+  }
+
+  renderMainPhotoOptions() {
+    const gridEl = document.getElementById("valuator-photo-modal-grid");
+    if (!gridEl) return;
+
+    if (this.suggestedImages.length === 0) {
+      gridEl.innerHTML = `
+        <div class="col-span-1 sm:col-span-3 text-center py-4 text-xs text-amber-800 bg-amber-50 rounded-xl border border-amber-200">
+          No se encontraron imágenes en línea para este modelo y color. Puedes elegir una de las fotos capturadas abajo o confirmar.
+        </div>
+      `;
+    } else {
+      gridEl.innerHTML = this.suggestedImages.map((imgUrl, i) => {
+        const isSelected = imgUrl === this.selectedVehicleMainImage;
+        return `
+          <div class="val-photo-option-card flex flex-col bg-white rounded-xl border-2 ${isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-slate-200'} p-2 shadow-sm transition cursor-pointer relative"
+               onclick="window.vehicleValuatorManager.selectMainVehiclePhotoModal('${imgUrl}')">
+            <div class="relative h-28 w-full rounded-lg overflow-hidden bg-slate-100 mb-2">
+              <img src="${imgUrl}" alt="Opción ${i + 1}" class="w-full h-full object-cover">
+              ${isSelected ? '<span class="absolute top-1.5 right-1.5 bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow">✓ Seleccionada</span>' : ''}
+            </div>
+            <div class="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-1.5">
+              <span>Opción ${i + 1}</span>
+              <span class="text-[10px] text-emerald-600 font-extrabold">Catálogo</span>
+            </div>
+            <button type="button" class="w-full py-1.5 px-2 rounded-lg text-xs ${isSelected ? 'font-bold bg-emerald-600 text-white shadow-sm' : 'font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700'}">
+              ${isSelected ? '✓ Seleccionada' : 'Elegir'}
+            </button>
+          </div>
+        `;
+      }).join("");
+    }
+
+    const capturedContainer = document.getElementById("valuator-photo-modal-captured-container");
+    const capturedGrid = document.getElementById("valuator-photo-modal-captured-grid");
+    const capturedList = Object.entries(this.photos).filter(([_, p]) => Boolean(p));
+    if (capturedContainer && capturedGrid) {
+      if (capturedList.length > 0) {
+        capturedContainer.classList.remove("hidden");
+        capturedGrid.innerHTML = capturedList.map(([zone, photoUrl]) => {
+          const isSelected = photoUrl === this.selectedVehicleMainImage;
+          return `
+            <div class="relative rounded-lg border-2 ${isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/30' : 'border-slate-200'} overflow-hidden cursor-pointer h-16 bg-slate-100"
+                 onclick="window.vehicleValuatorManager.selectMainVehiclePhotoModal('${photoUrl}')">
+              <img src="${photoUrl}" class="w-full h-full object-cover"/>
+              ${isSelected ? '<span class="absolute top-1 right-1 bg-emerald-600 text-white text-[8px] font-bold px-1 rounded">✓</span>' : ''}
+            </div>
+          `;
+        }).join("");
+      } else {
+        capturedContainer.classList.add("hidden");
+      }
+    }
+  }
+
+  selectMainVehiclePhotoModal(url) {
+    if (!url) return;
+    this.selectedVehicleMainImage = url;
+    this.referenceImageUrl = url;
+    this.renderMainPhotoOptions();
+  }
+
+  closeSelectMainPhotoModal() {
+    const modal = document.getElementById("valuator-main-photo-modal");
+    if (modal) modal.classList.add("hidden");
+  }
+
+  confirmMainPhotoAndRegister() {
+    this.closeSelectMainPhotoModal();
+    const costo = this._pendingCostoCompra;
+    this.completeBuyAndRegister(costo);
+  }
+
+  completeBuyAndRegister(costoCompra) {
 
     const vinInput = prompt("Introduce el número de serie / VIN o placas del vehículo (opcional):", "") || "";
 
