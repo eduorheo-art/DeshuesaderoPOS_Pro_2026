@@ -1966,31 +1966,14 @@
           </button>
         </div>
 
+        <!-- Botones contextuales paso 1/2: siempre visibles -->
         <div class="flex flex-wrap items-center gap-2">
-          <button 
-            id="edit-selected-row-btn"
-            onclick="window.appManager.openEditModalForSelected()"
-            class="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer"
-            title="Selecciona una fila de la tabla y haz clic para editar sus datos"
-          >
-            <span>✏️</span>
-            <span>Editar Datos</span>
-          </button>
           <button 
             onclick="window.aiRegisterManager.openModal()"
             class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5"
           >
             <span>📸</span>
             <span>+ Registrar con IA</span>
-          </button>
-          <button 
-            id="ai-batch-pricing-btn"
-            onclick="window.aiPriceUpdaterManager.openModal()"
-            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer"
-            title="Actualización de Compatibilidad y Precio mediante IA (Manuales OEM y Mercado Digital)"
-          >
-            <span>🤖</span>
-            <span>Actualización de Compatibilidad y Precio</span>
           </button>
           <!-- Botón Exportar Excel / CSV -->
           <button 
@@ -2011,56 +1994,91 @@
             <input type="file" id="excel-file-input" accept=".csv, .xlsx, .xls" class="hidden"/>
           </label>
         </div>
-      </div>
-
-      <div class="space-y-5 mb-6">
-        <section id="inventory-brand-step" class="sales-step-panel" aria-label="Marcas del inventario">
-          <div id="inventory-brand-buttons" aria-label="Seleccionar marca"></div>
-          <select id="inventory-filter-marca" class="sales-filter-control" aria-hidden="true" tabindex="-1">
-            <option value="">Seleccionar Marca...</option>
-          </select>
-        </section>
-        <section id="inventory-vehicle-step" class="sales-step-panel hidden" aria-label="Vehículos del inventario">
-          <h3 class="sales-step-heading">Vehículos</h3>
-          <div id="inventory-vehicle-buttons" aria-label="Seleccionar vehículo"></div>
-          <select id="inventory-filter-vehiculo" disabled class="sales-filter-control" aria-hidden="true" tabindex="-1">
-            <option value="">Seleccionar Vehículo...</option>
-          </select>
-        </section>
-      </div>
-
-      <div id="inventory-filter-empty-state" class="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm text-center text-sm font-semibold text-slate-500">
-        Seleccione marca y vehículo para mostrar inventario
-      </div>
-
-      <div id="inventory-table-container" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="overflow-x-auto max-h-[600px]">
-          <table class="w-full text-left">
-            <thead class="bg-slate-50 sticky top-0 z-10 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
-              <tr>
-                <th class="py-2.5 px-3">Código</th>
-                <th class="py-2.5 px-3">Negocio</th>
-                <th class="py-2.5 px-3">Pieza</th>
-                <th class="py-2.5 px-3">Vehículo Origen</th>
-                <th class="py-2.5 px-3">Año</th>
-                <th class="py-2.5 px-3">Estado</th>
-                <th class="py-2.5 px-3">Demanda</th>
-                <th class="py-2.5 px-3">Precio Base</th>
-                <th class="py-2.5 px-3">Precio Mínimo</th>
-                <th class="py-2.5 px-3 text-indigo-700">Costo</th>
-                <th class="py-2.5 px-3">Venta Final</th>
-                <th class="py-2.5 px-3">Fecha Venta</th>
-                <th class="py-2.5 px-3">Compatibilidad</th>
-                <th class="py-2.5 px-3">Observación / Falla</th>
-                <th class="py-2.5 px-3 text-right">Fotos</th>
-              </tr>
-            </thead>
-            <tbody id="full-inventory-tbody">
-              <!-- Dinámico desde app.js -->
-            </tbody>
-          </table>
+        <!-- Botones contextuales paso 3 (tabla de piezas): ocultos hasta seleccionar vehículo -->
+        <div id="inv-parts-action-btns" class="hidden flex flex-wrap items-center gap-2">
+          <button 
+            id="edit-selected-row-btn"
+            onclick="window.appManager.openEditModalForSelected()"
+            class="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer"
+            title="Selecciona una fila de la tabla y haz clic para editar sus datos"
+          >
+            <span>✏️</span>
+            <span>Editar Datos</span>
+          </button>
+          <button 
+            id="ai-batch-pricing-btn"
+            onclick="window.aiPriceUpdaterManager.openModal()"
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer"
+            title="Actualización de Compatibilidad y Precio mediante IA (Manuales OEM y Mercado Digital)"
+          >
+            <span>🤖</span>
+            <span>Actualización de Compatibilidad y Precio</span>
+          </button>
         </div>
       </div>
+
+      <!-- Paso 1: Marcas -->
+      <section id="inventory-brand-step" class="sales-step-panel space-y-5 mb-6" aria-label="Marcas del inventario">
+        <div id="inventory-brand-buttons" aria-label="Seleccionar marca"></div>
+        <select id="inventory-filter-marca" class="sales-filter-control" aria-hidden="true" tabindex="-1">
+          <option value="">Seleccionar Marca...</option>
+        </select>
+      </section>
+
+      <!-- Paso 2: Vehículos de la marca seleccionada -->
+      <section id="inventory-vehicle-step" class="sales-step-panel hidden space-y-5 mb-6" aria-label="Vehículos del inventario">
+        <button onclick="window.appManager.backToInventoryBrands()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer">
+          ← Volver a Marcas
+        </button>
+        <div id="inventory-vehicle-buttons" aria-label="Seleccionar vehículo"></div>
+        <select id="inventory-filter-vehiculo" disabled class="sales-filter-control" aria-hidden="true" tabindex="-1">
+          <option value="">Seleccionar Vehículo...</option>
+        </select>
+      </section>
+
+      <!-- Paso 3: Tabla de piezas del vehículo seleccionado -->
+      <section id="inventory-parts-step" class="hidden space-y-3" aria-label="Piezas del vehículo">
+        <div class="flex items-center gap-3 flex-wrap">
+          <button onclick="window.appManager.backToInventoryVehicles()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer">
+            ← Volver a Vehículos
+          </button>
+          <span id="inventory-parts-title" class="text-sm font-black text-slate-700"></span>
+          <span id="full-inventory-count" class="text-xs text-slate-500"></span>
+        </div>
+
+        <div id="inventory-filter-empty-state" class="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm text-center text-sm font-semibold text-slate-500 hidden">
+          Sin piezas registradas para este vehículo
+        </div>
+
+        <div id="inventory-table-container" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto max-h-[600px]">
+            <table class="w-full text-left">
+              <thead class="bg-slate-50 sticky top-0 z-10 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase">
+                <tr>
+                  <th class="py-2.5 px-3">Código</th>
+                  <th class="py-2.5 px-3">Negocio</th>
+                  <th class="py-2.5 px-3">Pieza</th>
+                  <th class="py-2.5 px-3">Vehículo Origen</th>
+                  <th class="py-2.5 px-3">Año</th>
+                  <th class="py-2.5 px-3">Estado</th>
+                  <th class="py-2.5 px-3">Demanda</th>
+                  <th class="py-2.5 px-3">Precio Base</th>
+                  <th class="py-2.5 px-3">Precio Mínimo</th>
+                  <th class="py-2.5 px-3 text-indigo-700">Costo</th>
+                  <th class="py-2.5 px-3">Venta Final</th>
+                  <th class="py-2.5 px-3">Fecha Venta</th>
+                  <th class="py-2.5 px-3">Compatibilidad</th>
+                  <th class="py-2.5 px-3">Observación / Falla</th>
+                  <th class="py-2.5 px-3 text-right">Fotos</th>
+                </tr>
+              </thead>
+              <tbody id="full-inventory-tbody">
+                <!-- Dinámico desde app.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </section>
 
     <!-- ================= 6. VISTA: CONFIGURACIÓN ================= -->
@@ -11260,6 +11278,9 @@ class AIPriceUpdaterManager {
     const results = [];
 
     for (let offset = 0; offset < parts.length; offset += 20) {
+      if (offset > 0) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
       const batch = parts.slice(offset, offset + 20);
       const inventory = batch.map((part) => ({
         id: part.id,
@@ -11559,12 +11580,15 @@ class AIPriceUpdaterManager {
       };
     });
 
-    // Enriquecer con observaciones OEM vía IA (en paralelo, máx 5 simultáneos para no saturar la API)
+    // Enriquecer con observaciones OEM vía IA (lotes controlados con pausa para evitar 429)
     if (countEl) countEl.textContent = `Consultando variantes técnicas OEM en manuales de fabricante...`;
-    const chunkSize = 5;
+    const chunkSize = 2;
     let aiErrorOcurrido = null;
     for (let i = 0; i < baseProposals.length; i += chunkSize) {
       if (aiErrorOcurrido) break;
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
       const chunk = baseProposals.slice(i, i + chunkSize);
       try {
         await Promise.all(chunk.map(async proposal => {
@@ -11988,6 +12012,61 @@ class AppManager {
     this.inventoryVehicle = "";
     this.inventoryFiltersInitialized = false;
     this.selectedInventoryYardBusiness = "TODOS";
+    this.currentUser = null;
+  }
+
+  // ── Inventario General: navegación progresiva ──
+  showInventoryBrands() {
+    this.inventoryBrand = "";
+    this.inventoryVehicle = "";
+    const brandSelect = document.getElementById("inventory-filter-marca");
+    const vehicleSelect = document.getElementById("inventory-filter-vehiculo");
+    if (brandSelect) brandSelect.value = "";
+    if (vehicleSelect) vehicleSelect.value = "";
+    document.getElementById("inventory-brand-step")?.classList.remove("hidden");
+    document.getElementById("inventory-vehicle-step")?.classList.add("hidden");
+    document.getElementById("inventory-parts-step")?.classList.add("hidden");
+    document.getElementById("inv-parts-action-btns")?.classList.add("hidden");
+    this.renderInventoryTable();
+  }
+
+  showInventoryVehicles(marca) {
+    this.inventoryBrand = marca || "";
+    this.inventoryVehicle = "";
+    const brandSelect = document.getElementById("inventory-filter-marca");
+    const vehicleSelect = document.getElementById("inventory-filter-vehiculo");
+    if (brandSelect) brandSelect.value = this.inventoryBrand;
+    if (vehicleSelect) vehicleSelect.value = "";
+    this.populateInventoryVehicleDropdown();
+    this.renderInventorySelectionButtons();
+    document.getElementById("inventory-brand-step")?.classList.add("hidden");
+    document.getElementById("inventory-vehicle-step")?.classList.remove("hidden");
+    document.getElementById("inventory-parts-step")?.classList.add("hidden");
+    document.getElementById("inv-parts-action-btns")?.classList.add("hidden");
+  }
+
+  showInventoryParts(marca, vehiculo) {
+    this.inventoryBrand = marca || "";
+    this.inventoryVehicle = vehiculo || "";
+    const brandSelect = document.getElementById("inventory-filter-marca");
+    const vehicleSelect = document.getElementById("inventory-filter-vehiculo");
+    if (brandSelect) brandSelect.value = this.inventoryBrand;
+    if (vehicleSelect) vehicleSelect.value = this.inventoryVehicle;
+    document.getElementById("inventory-brand-step")?.classList.add("hidden");
+    document.getElementById("inventory-vehicle-step")?.classList.add("hidden");
+    document.getElementById("inventory-parts-step")?.classList.remove("hidden");
+    document.getElementById("inv-parts-action-btns")?.classList.remove("hidden");
+    const title = document.getElementById("inventory-parts-title");
+    if (title) title.textContent = `${this.inventoryBrand} › ${this.inventoryVehicle}`;
+    this.renderInventoryTable();
+  }
+
+  backToInventoryBrands() {
+    this.showInventoryBrands();
+  }
+
+  backToInventoryVehicles() {
+    this.showInventoryVehicles(this.inventoryBrand);
   }
 
   setInventoryYardFilter(business) {
@@ -12158,7 +12237,13 @@ class AppManager {
       }
     } else if (viewName === "inventory") {
       this.initializeInventoryFilters();
-      this.renderInventoryTable();
+      if (!this.inventoryBrand) {
+        this.showInventoryBrands();
+      } else if (!this.inventoryVehicle) {
+        this.showInventoryVehicles(this.inventoryBrand);
+      } else {
+        this.showInventoryParts(this.inventoryBrand, this.inventoryVehicle);
+      }
     }
 
     // Scroll to top
@@ -12630,16 +12715,20 @@ class AppManager {
 
     if (!this.inventoryFiltersInitialized) {
       brandSelect.addEventListener("change", (event) => {
-        this.inventoryBrand = event.target.value;
-        this.inventoryVehicle = "";
-        this.populateInventoryVehicleDropdown();
-        this.renderInventorySelectionButtons();
-        this.renderInventoryTable();
+        const val = event.target.value;
+        if (val) {
+          this.showInventoryVehicles(val);
+        } else {
+          this.showInventoryBrands();
+        }
       });
       vehicleSelect.addEventListener("change", (event) => {
-        this.inventoryVehicle = event.target.value;
-        this.renderInventorySelectionButtons();
-        this.renderInventoryTable();
+        const val = event.target.value;
+        if (val) {
+          this.showInventoryParts(this.inventoryBrand, val);
+        } else if (this.inventoryBrand) {
+          this.showInventoryVehicles(this.inventoryBrand);
+        }
       });
       this.inventoryFiltersInitialized = true;
     }
@@ -12690,8 +12779,7 @@ class AppManager {
       button.append(logoImage);
       if (!brandIconSlug) this.loadSalesBrandLogo(logoImage, brand);
       button.addEventListener("click", () => {
-        brandSelect.value = brand;
-        brandSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        this.showInventoryVehicles(brand);
       });
       brandContainer.append(button);
     });
@@ -12715,14 +12803,11 @@ class AppManager {
       image.dataset.vehicleModel = modelName || option.textContent;
       button.append(image, label);
       button.addEventListener("click", () => {
-        vehicleSelect.value = option.value;
-        vehicleSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        this.showInventoryParts(this.inventoryBrand, option.value);
       });
       vehicleContainer.append(button);
       this.observeSalesVehicleCard(image, brandSelect.value);
     });
-
-    vehicleStep.classList.toggle("hidden", !brandSelect.value);
   }
 
   populateInventoryVehicleDropdown() {
