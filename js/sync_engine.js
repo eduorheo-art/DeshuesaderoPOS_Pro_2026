@@ -179,6 +179,23 @@ class YonkeSyncEngine {
     }[kind];
   }
 
+  sanitizeRecordForTable(table, record) {
+    if (!record || typeof record !== "object") return record;
+    if (table === "yonke_parts" || table === "parts") {
+      const allowed = ["id", "vehiculo_origen", "anio", "pieza", "fecha_venta", "observacion", "estado", "precio_base", "precio_minimo", "cantidad", "venta_final", "compatibilidad", "fotos", "ubicacion_patio", "updated_at", "dispositivo_origen", "owner_id"];
+      const clean = {};
+      allowed.forEach(k => { if (record[k] !== undefined) clean[k] = record[k]; });
+      return clean;
+    }
+    if (table === "yonke_vehicles" || table === "vehicles") {
+      const allowed = ["id", "modelo", "anio", "costo", "fecha_ingreso", "color", "vin", "fotos", "notas", "updated_at", "dispositivo_origen", "owner_id"];
+      const clean = {};
+      allowed.forEach(k => { if (record[k] !== undefined) clean[k] = record[k]; });
+      return clean;
+    }
+    return record;
+  }
+
   collection(kind) {
     if (!window.yonkeDB) return [];
     return window.yonkeDB[kind] || [];
@@ -241,7 +258,8 @@ class YonkeSyncEngine {
           return tl > tr;
         });
         if (toPush.length) {
-          await this.client.from(this.tableName(kind)).upsert(toPush, { onConflict: "id" });
+          const sanitizedPush = toPush.map(r => this.sanitizeRecordForTable(kind, r));
+          await this.client.from(this.tableName(kind)).upsert(sanitizedPush, { onConflict: "id" });
         }
       }
       window.yonkeDB.persist();
@@ -306,7 +324,8 @@ class YonkeSyncEngine {
           const { error } = await this.client.from(table).delete().eq("id", item.record.id);
           if (error) throw error;
         } else {
-          const { error } = await this.client.from(table).upsert(item.record, { onConflict: "id" });
+          const cleanRec = this.sanitizeRecordForTable(item.tableName, item.record);
+          const { error } = await this.client.from(table).upsert(cleanRec, { onConflict: "id" });
           if (error) throw error;
         }
         await window.yonkeLocalStore.removeQueueItem(item.qid);

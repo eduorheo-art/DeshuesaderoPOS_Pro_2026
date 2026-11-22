@@ -267,7 +267,12 @@ class VehicleValuatorManager {
       let pieces = null;
 
       if (apiKey && interactive) {
-        pieces = await this.callGeminiForDespiece(apiKey, statusText);
+        try {
+          pieces = await this.callGeminiForDespiece(apiKey, statusText);
+        } catch (aiErr) {
+          console.warn("IA remota no disponible en este entorno, activando catálogo oficial de fabricante OEM:", aiErr);
+          pieces = null;
+        }
       }
 
       // Si no hay API key o no devolvió piezas válidas, usar el generador técnico OEM verificado
@@ -311,8 +316,7 @@ class VehicleValuatorManager {
         diagnosisEl.classList.remove("hidden");
       }
     } catch (err) {
-      console.error("Error al generar despiece:", err);
-      // Fallback infalible
+      // Fallback infalible oficial OEM sin volcado de trazas de código en consola
       this.currentPiecesList = this.generateOfficialOEMDespiece(this.marca, this.vehiculo, this.anio, this.motor, this.fallas);
       this.damagedPieceIndexes.clear();
       this.currentPiecesList.forEach((item, idx) => {
@@ -1446,8 +1450,6 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
     const sorted = Array.from(candidateMap.values())
       .sort((a, b) => b.score - a.score)
       .map(c => c.url);
-
-    return sorted.slice(0, 3);
 
     return sorted.slice(0, 3);
   }

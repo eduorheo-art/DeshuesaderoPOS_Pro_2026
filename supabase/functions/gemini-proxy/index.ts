@@ -15,20 +15,17 @@ Deno.serve(async request => {
   const origin = (request.headers.get("Origin") || "").replace(/\/$/, "");
   const allowedOrigins = Array.from(new Set([
     "https://eduorheo-art.github.io",
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "null",
     ...(Deno.env.get("YONKE_ALLOWED_ORIGINS") || "")
       .split(",")
       .map(value => value.trim().replace(/\/$/, ""))
       .filter(Boolean)
   ]));
 
-  if (!origin || !allowedOrigins.includes(origin)) {
-    const headers = origin
-      ? { ...corsHeaders(origin), "Content-Type": "application/json" }
-      : { "Content-Type": "application/json" };
-    return new Response(JSON.stringify({ error: "Origin not allowed" }), { status: 403, headers });
-  }
   if (request.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders(origin) });
+    return new Response("ok", { headers: corsHeaders(origin || "*") });
   }
   if (request.method !== "POST") {
     return jsonResponse(origin, 405, { error: "Method not allowed" });

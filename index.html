@@ -17,7 +17,14 @@
       document.write('<script src="https://cdn.tailwindcss.com"><\/script>');
     }
   </script>
-  <link rel="manifest" href="manifest.json">
+  <script>
+    if (location.protocol !== "file:") {
+      const mfLink = document.createElement("link");
+      mfLink.rel = "manifest";
+      mfLink.href = "manifest.json";
+      document.head.appendChild(mfLink);
+    }
+  </script>
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
@@ -561,30 +568,6 @@
       </label>
       <p class="text-[11px] text-slate-500">Ejecuta <code class="bg-slate-100 px-1 rounded">supabase_schema.sql</code> en el SQL Editor de Supabase antes de conectar. Sin estas claves la app sigue funcionando 100% local.</p>
       <button id="cloud-config-save" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-xl">Guardar y conectar</button>
-    </div>
-  </div>
-
-  <!-- MODAL: CONFIGURAR API KEY DE GOOGLE GEMINI -->
-  <div id="gemini-config-modal" class="hidden fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg space-y-4">
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
-            <span>✨</span>
-            <span>Clave API de Google Gemini</span>
-          </h3>
-          <p class="text-xs text-slate-500 mt-1">Conecta tu clave de API de Google (gratuita en Google AI Studio: <a href="https://aistudio.google.com/" target="_blank" class="text-indigo-600 underline font-bold">aistudio.google.com</a>). El software se conectará directamente a Google sin límites de intermediarios.</p>
-        </div>
-        <button id="gemini-config-close" type="button" class="p-1 text-slate-400 hover:text-slate-700">✕</button>
-      </div>
-      <label class="block text-xs font-bold text-slate-600">
-        Google Gemini API Key
-        <input id="gemini-api-key-input" type="password" placeholder="AIzaSy..." class="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500"/>
-      </label>
-      <div class="flex items-center gap-2 pt-2">
-        <button id="gemini-config-save" type="button" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm rounded-xl shadow transition">Guardar y Activar Directo</button>
-        <button id="gemini-config-delete" type="button" class="px-4 py-3 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs rounded-xl">Borrar</button>
-      </div>
     </div>
   </div>
 
@@ -2101,20 +2084,6 @@
               class="w-full px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl shadow transition cursor-pointer"
             >Configurar Nube</button>
           </div>
-
-          <!-- Conexión Directa Google Gemini AI -->
-          <div class="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-col items-center gap-3 text-center">
-            <span class="text-3xl">✨</span>
-            <div>
-              <h3 class="font-black text-slate-900 text-sm">Inteligencia Artificial Gemini</h3>
-              <p id="gemini-status-desc" class="text-xs text-slate-500 mt-1">Conexión directa con Google Gemini sin intermediarios</p>
-            </div>
-            <button 
-              id="gemini-config-btn"
-              type="button"
-              class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow transition cursor-pointer"
-            >Configurar Clave Gemini</button>
-          </div>
         </div>
       </div>
     </section>
@@ -3124,12 +3093,11 @@ if (typeof supabase !== "undefined" && supabase.createClient) {
   console.log("Supabase listo y disponible desde el inicio.");
 }
 
+
 window.callGeminiProxy = async (model, request) => {
-  // Clonar request para evitar mutaciones externas
   const reqPayload = JSON.parse(JSON.stringify(request || {}));
 
-  // REGLA FUNDAMENTAL DE GEMINI: Si la petición incluye imágenes (inlineData), Google Gemini prohíbe tools (googleSearch).
-  // Provoca HTTP 400 Bad Request ("Grounding is only supported for text-only requests").
+  // Si la petición contiene imágenes (inlineData), Google Gemini prohíbe tools (googleSearch) con 400
   const hasInlineImages = reqPayload?.contents?.some(c =>
     Array.isArray(c?.parts) && c.parts.some(p => p?.inlineData)
   );
@@ -3137,176 +3105,69 @@ window.callGeminiProxy = async (model, request) => {
     delete reqPayload.tools;
   }
 
-  // 1. PRIORIDAD DIRECTA: Si el usuario tiene una API Key de Google configurada
-  const directApiKey = (localStorage.getItem("yonke_gemini_api_key") || localStorage.getItem("gemini_api_key") || "").trim();
-  if (directApiKey) {
-    const directModels = [model, "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"].filter(Boolean);
-    const uniqueDirect = [...new Set(directModels)];
-    for (const dModel of uniqueDirect) {
-      try {
-        const directRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${dModel}:generateContent?key=${encodeURIComponent(directApiKey)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(reqPayload)
-        });
-        if (directRes.ok) {
-          return directRes;
-        }
-        if (directRes.status === 400 && reqPayload.tools) {
-          delete reqPayload.tools;
-          const retryDirect = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${dModel}:generateContent?key=${encodeURIComponent(directApiKey)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(reqPayload)
-          });
-          if (retryDirect.ok) return retryDirect;
-        }
-        if (directRes.status === 401 || directRes.status === 403) {
-          console.warn("API Key directa de Google reportó 401/403, intentando vía proxy.");
-          break;
-        }
-      } catch (dErr) {
-        console.warn(`Error al conectar directamente con Gemini (${dModel}):`, dErr);
-      }
-    }
-  }
-
-  // 2. FALLBACK A PROXY SUPABASE
   const client = window.yonkeSupabaseClient;
-  if (client) {
-    try {
-      const { data, error } = await client.auth.getSession();
-      if (!error && data?.session?.access_token) {
-        const proxyModels = [model, "gemini-3.6-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"].filter(Boolean);
-        const modelsToTry = [...new Set(proxyModels)];
+  if (!client) {
+    throw new Error("Cliente de autenticación de Supabase no inicializado.");
+  }
 
-        for (const tryModel of modelsToTry) {
-          let attempt = 0;
-          while (attempt < 2) {
-            attempt++;
-            try {
-              const res = await fetch(`${SUPABASE_URL}/functions/v1/gemini-proxy`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  apikey: SUPABASE_ANON_KEY,
-                  Authorization: `Bearer ${data.session.access_token}`
-                },
-                body: JSON.stringify({ model: tryModel, request: reqPayload })
-              });
-              if (res.ok) {
-                return res;
-              }
-              if (res.status === 400 && reqPayload.tools) {
-                delete reqPayload.tools;
-                const retryRes = await fetch(`${SUPABASE_URL}/functions/v1/gemini-proxy`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    apikey: SUPABASE_ANON_KEY,
-                    Authorization: `Bearer ${data.session.access_token}`
-                  },
-                  body: JSON.stringify({ model: tryModel, request: reqPayload })
-                });
-                if (retryRes.ok) return retryRes;
-              }
-              if (res.status === 503 || res.status === 429) {
-                if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
-                else break;
-              } else if (res.status === 400) {
-                break; // probar siguiente modelo permitido
-              } else {
-                return res;
-              }
-            } catch (fetchErr) {
-              break;
-            }
-          }
+  const { data, error } = await client.auth.getSession();
+  if (error || !data?.session?.access_token) {
+    throw new Error("Se requiere sesión activa de Supabase para consultar la IA en el servidor.");
+  }
+
+  const modelsToTry = [...new Set([model, "gemini-3.6-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"])].filter(Boolean);
+
+  let lastError = null;
+  for (const tryModel of modelsToTry) {
+    let attempt = 0;
+    while (attempt < 2) {
+      attempt++;
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gemini-proxy`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${data.session.access_token}`
+          },
+          body: JSON.stringify({ model: tryModel, request: reqPayload })
+        });
+
+        if (res.ok) {
+          return res;
         }
+
+        if (res.status === 400 && reqPayload.tools) {
+          delete reqPayload.tools;
+          const retryRes = await fetch(`${SUPABASE_URL}/functions/v1/gemini-proxy`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${data.session.access_token}`
+            },
+            body: JSON.stringify({ model: tryModel, request: reqPayload })
+          });
+          if (retryRes.ok) return retryRes;
+        }
+
+        if (res.status === 503 || res.status === 429) {
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
+          else break;
+        } else if (res.status === 400) {
+          break; // probar siguiente modelo
+        } else {
+          return res;
+        }
+      } catch (fetchErr) {
+        lastError = fetchErr;
+        break;
       }
-    } catch (proxyEx) {
-      console.warn("Fallo en proxy Supabase:", proxyEx);
     }
   }
 
-  // 3. Si no hay clave directa configurada y el proxy no pudo responder
-  const promptKey = prompt(
-    "⚠️ Clave de Google Gemini: Para conectar directamente con Google sin errores de proxy o cuota, ingresa tu API Key de Google (gratis en Google AI Studio):",
-    localStorage.getItem("yonke_gemini_api_key") || ""
-  );
-  if (promptKey && promptKey.trim()) {
-    const cleanKey = promptKey.trim();
-    localStorage.setItem("yonke_gemini_api_key", cleanKey);
-    const directRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(cleanKey)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(reqPayload)
-    });
-    if (directRes.ok) {
-      return directRes;
-    }
-  }
-
-  throw new Error("No se pudo conectar con el servicio de IA de Gemini. Verifica tu API Key o conexión.");
+  throw lastError || new Error("Servicio de IA de Gemini en el servidor no disponible temporalmente.");
 };
-
-function updateGeminiStatusUI() {
-  const desc = document.getElementById("gemini-status-desc");
-  const key = (localStorage.getItem("yonke_gemini_api_key") || localStorage.getItem("gemini_api_key") || "").trim();
-  if (desc) {
-    if (key) {
-      desc.textContent = "✅ Conectado directo con API Key de Google (" + key.substring(0, 6) + "...)";
-      desc.className = "text-xs text-emerald-600 font-bold mt-1";
-    } else {
-      desc.textContent = "☁️ Usando proxy en la nube (agrega tu clave para conexión directa)";
-      desc.className = "text-xs text-slate-500 mt-1";
-    }
-  }
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  updateGeminiStatusUI();
-
-  const gModal = document.getElementById("gemini-config-modal");
-  const gOpenBtn = document.getElementById("gemini-config-btn");
-  const gCloseBtn = document.getElementById("gemini-config-close");
-  const gSaveBtn = document.getElementById("gemini-config-save");
-  const gDelBtn = document.getElementById("gemini-config-delete");
-  const gInput = document.getElementById("gemini-api-key-input");
-
-  if (gOpenBtn && gModal) {
-    gOpenBtn.addEventListener("click", () => {
-      if (gInput) gInput.value = localStorage.getItem("yonke_gemini_api_key") || "";
-      gModal.classList.remove("hidden");
-    });
-  }
-  if (gCloseBtn && gModal) {
-    gCloseBtn.addEventListener("click", () => gModal.classList.add("hidden"));
-  }
-  if (gSaveBtn && gInput && gModal) {
-    gSaveBtn.addEventListener("click", () => {
-      const val = gInput.value.trim();
-      if (!val) {
-        alert("Por favor ingresa una API Key válida.");
-        return;
-      }
-      localStorage.setItem("yonke_gemini_api_key", val);
-      updateGeminiStatusUI();
-      gModal.classList.add("hidden");
-      alert("✅ API Key de Google Gemini guardada y lista para uso directo.");
-    });
-  }
-  if (gDelBtn && gModal) {
-    gDelBtn.addEventListener("click", () => {
-      if (confirm("¿Deseas quitar la clave de Google Gemini?")) {
-        localStorage.removeItem("yonke_gemini_api_key");
-        if (gInput) gInput.value = "";
-        updateGeminiStatusUI();
-        gModal.classList.add("hidden");
-      }
-    });
-  }
-});
 
 async function requireYonkeAuth(client) {
   const callbackParams = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -3884,7 +3745,19 @@ class YonkeDB {
     this.vehicles.unshift(newVehicle);
     this.persist();
     if (window.yonkeSupabaseClient && navigator.onLine) {
-      window.yonkeSupabaseClient.from("yonke_vehicles").insert([newVehicle]).then().catch(e => console.warn("Sync insert vehicle:", e));
+      const cleanVehicle = {
+        id: String(newVehicle.id),
+        modelo: newVehicle.modelo || "",
+        anio: String(newVehicle.anio || ""),
+        costo: Number(newVehicle.costo) || 0,
+        fecha_ingreso: newVehicle.fecha_ingreso || new Date().toISOString().split("T")[0],
+        color: newVehicle.color || "No especificado",
+        vin: newVehicle.vin || "",
+        fotos: Array.isArray(newVehicle.fotos) ? newVehicle.fotos : [],
+        notas: newVehicle.notas || ""
+      };
+      if (newVehicle.owner_id) cleanVehicle.owner_id = newVehicle.owner_id;
+      window.yonkeSupabaseClient.from("yonke_vehicles").insert([cleanVehicle]).then().catch(e => console.warn("Sync insert vehicle:", e));
     }
     return newVehicle;
   }
@@ -3981,7 +3854,24 @@ class YonkeDB {
     this.parts.unshift(newPart);
     this.persist();
     if (window.yonkeSupabaseClient && navigator.onLine) {
-      window.yonkeSupabaseClient.from("yonke_parts").insert([newPart]).then().catch(e => console.warn("Sync insert part:", e));
+      const cleanPart = {
+        id: String(newPart.id),
+        vehiculo_origen: newPart.vehiculo_origen || "",
+        anio: String(newPart.anio || ""),
+        pieza: newPart.pieza || "",
+        fecha_venta: newPart.fecha_venta || null,
+        observacion: newPart.observacion || "",
+        estado: newPart.estado || "En existencia",
+        precio_base: Number(newPart.precio_base) || 0,
+        precio_minimo: Number(newPart.precio_minimo) || 0,
+        cantidad: Number(newPart.cantidad) >= 0 ? Number(newPart.cantidad) : 1,
+        venta_final: newPart.venta_final !== null && newPart.venta_final !== undefined && newPart.venta_final !== "" ? Number(newPart.venta_final) : null,
+        compatibilidad: newPart.compatibilidad || "",
+        fotos: Array.isArray(newPart.fotos) ? newPart.fotos : [],
+        ubicacion_patio: newPart.ubicacion_patio || "Patio general"
+      };
+      if (newPart.owner_id) cleanPart.owner_id = newPart.owner_id;
+      window.yonkeSupabaseClient.from("yonke_parts").insert([cleanPart]).then().catch(e => console.warn("Sync insert part:", e));
     }
     return newPart;
   }
@@ -7592,7 +7482,12 @@ class VehicleValuatorManager {
       let pieces = null;
 
       if (apiKey && interactive) {
-        pieces = await this.callGeminiForDespiece(apiKey, statusText);
+        try {
+          pieces = await this.callGeminiForDespiece(apiKey, statusText);
+        } catch (aiErr) {
+          console.warn("IA remota no disponible en este entorno, activando catálogo oficial de fabricante OEM:", aiErr);
+          pieces = null;
+        }
       }
 
       // Si no hay API key o no devolvió piezas válidas, usar el generador técnico OEM verificado
@@ -7636,8 +7531,7 @@ class VehicleValuatorManager {
         diagnosisEl.classList.remove("hidden");
       }
     } catch (err) {
-      console.error("Error al generar despiece:", err);
-      // Fallback infalible
+      // Fallback infalible oficial OEM sin volcado de trazas de código en consola
       this.currentPiecesList = this.generateOfficialOEMDespiece(this.marca, this.vehiculo, this.anio, this.motor, this.fallas);
       this.damagedPieceIndexes.clear();
       this.currentPiecesList.forEach((item, idx) => {
@@ -8742,7 +8636,6 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
       .map(c => c.url);
 
     return sorted.slice(0, 3);
-  }
   }
 
   selectMainVehiclePhoto(url) {
