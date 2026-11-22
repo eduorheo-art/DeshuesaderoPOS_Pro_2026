@@ -80,7 +80,7 @@ Deno.serve(async request => {
     } catch {
       return jsonResponse(origin, 400, { error: { message: "Invalid JSON in request body", status: "INVALID_ARGUMENT" } });
     }
-    const models = new Set(["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro"]);
+    const models = new Set(["gemini-3.8-flash", "gemini-3.5-flash-lite"]);
     if (typeof payload.model !== "string") {
       return jsonResponse(origin, 400, { error: { message: "Field 'model' is required as a string", status: "INVALID_ARGUMENT" } });
     }

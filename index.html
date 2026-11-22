@@ -3115,7 +3115,10 @@ window.callGeminiProxy = async (model, request) => {
     throw new Error("Se requiere sesión activa de Supabase para consultar la IA en el servidor.");
   }
 
-  const modelsToTry = [...new Set([model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"])].filter(Boolean);
+  // Modelos oficiales vigentes: gemini-3.8-flash (principal) y gemini-3.5-flash-lite (respaldo)
+  const targetModel = (model === "gemini-3.5-flash-lite") ? "gemini-3.5-flash-lite" : "gemini-3.8-flash";
+  const fallbackModel = (targetModel === "gemini-3.8-flash") ? "gemini-3.5-flash-lite" : "gemini-3.8-flash";
+  const modelsToTry = [targetModel, fallbackModel];
   let lastError = null;
 
   const extractErrorDetail = async (response) => {
@@ -5906,7 +5909,7 @@ Devuelve únicamente JSON con este formato:
       const mimeType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";")) || "image/jpeg";
       const rawBase64 = base64Data.split(",")[1];
 
-      const aiResponse = await window.callGeminiProxy("gemini-2.0-flash", {
+      const aiResponse = await window.callGeminiProxy("gemini-3.8-flash", {
         contents: [{
           parts: [
             { text: prompt },
@@ -6356,7 +6359,7 @@ Responde ÚNICAMENTE un JSON válido con esta estructura (sin texto adicional fu
       let data = null;
 
       if (window.callGeminiProxy) {
-        const response = await window.callGeminiProxy("gemini-2.0-flash", {
+        const response = await window.callGeminiProxy("gemini-3.8-flash", {
           contents: [{
             parts: [
               { text: PROMPT_OEM_MANUALS },
@@ -7654,7 +7657,7 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
       reqPayload.tools = [{ googleSearch: {} }];
     }
 
-    const res = await window.callGeminiProxy("gemini-2.0-flash", reqPayload);
+    const res = await window.callGeminiProxy("gemini-3.8-flash", reqPayload);
 
     if (!res || !res.ok) {
       const errText = await res.text().catch(() => `HTTP ${res?.status || "error"}`);
@@ -8724,7 +8727,7 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       });
       if (parts.length === 1) throw new Error("No hay imágenes válidas para enviar al análisis.");
 
-      const response = await window.callGeminiProxy("gemini-2.0-flash", {
+      const response = await window.callGeminiProxy("gemini-3.8-flash", {
         contents: [{ parts }],
         generationConfig: { maxOutputTokens: 2048, temperature: 0.1 }
       });
@@ -10614,7 +10617,7 @@ class AIRegisterManager {
           }
         });
       }
-      const response = await window.callGeminiProxy("gemini-2.0-flash", {
+      const response = await window.callGeminiProxy("gemini-3.8-flash", {
             contents: [{
               parts: [
                 { text: OEM_VISION_PROMPT },
@@ -11268,7 +11271,7 @@ class AIPriceUpdaterManager {
         compatibilidad_actual: part.compatibilidad || ""
       }));
       const prompt = `Revisa los registros del inventario con Google Search. Para PRECIO consulta publicaciones vigentes de piezas usadas OEM en México. Para COMPATIBILIDAD consulta documentación y catálogos oficiales OEM del año/modelo; no infieras compatibilidad. Estima demanda Alta/Media/Baja solo cuando haya evidencia de mercado. Devuelve únicamente JSON válido como array con los mismos id y campos: {"id":"...","precio_base":0,"precio_fuente":"URL","demanda":"Alta|Media|Baja","busquedas_info":"estimación y periodo","demanda_fuente":"URL","compatibilidad":"...","compatibilidad_fuente":"URL"}. Deja un campo vacío si no puedes respaldarlo con su fuente. No propongas datos sin evidencia.\nInventario: ${JSON.stringify(inventory)}`;
-      const response = await window.callGeminiProxy("gemini-2.0-flash", {
+      const response = await window.callGeminiProxy("gemini-3.8-flash", {
           contents: [{ parts: [{ text: prompt }] }],
           tools: [{ googleSearch: {} }],
           generationConfig: { maxOutputTokens: 8192, temperature: 0.1 }
@@ -11280,7 +11283,8 @@ class AIPriceUpdaterManager {
           console.warn(`Revisión de inventario aplazada (${response.status}): reintentará en 2 horas.`);
           return [];
         }
-        throw new Error(`Gemini inventory review failed: ${response.status}`);
+        console.warn(`Revisión de inventario detenida por error de API (${response.status}).`);
+        return [];
       }
       const data = await response.json();
       const candidate = data?.candidates?.[0];
@@ -11558,21 +11562,34 @@ class AIPriceUpdaterManager {
     // Enriquecer con observaciones OEM vía IA (en paralelo, máx 5 simultáneos para no saturar la API)
     if (countEl) countEl.textContent = `Consultando variantes técnicas OEM en manuales de fabricante...`;
     const chunkSize = 5;
+    let aiErrorOcurrido = null;
     for (let i = 0; i < baseProposals.length; i += chunkSize) {
+      if (aiErrorOcurrido) break;
       const chunk = baseProposals.slice(i, i + chunkSize);
-      await Promise.all(chunk.map(async proposal => {
-        const oemObs = await this._fetchOEMVersionObservation(proposal._part);
-        if (oemObs) {
-          // La observación OEM va ANTES de la barra separadora /
-          // Si hay falla/garantía previa, se conserva después del separador
-          const existingObs = proposal.currentObs;
-          const partes = existingObs.split(" / ");
-          const fallaExistente = partes.length > 1 ? partes.slice(1).join(" / ").trim() : "";
-          proposal.suggestedObservacion = fallaExistente
-            ? `${oemObs} / ${fallaExistente}`
-            : oemObs;
-        }
-      }));
+      try {
+        await Promise.all(chunk.map(async proposal => {
+          if (aiErrorOcurrido) return;
+          const oemObs = await this._fetchOEMVersionObservation(proposal._part);
+          if (oemObs) {
+            // La observación OEM va ANTES de la barra separadora /
+            // Si hay falla/garantía previa, se conserva después del separador
+            const existingObs = proposal.currentObs;
+            const partes = existingObs.split(" / ");
+            const fallaExistente = partes.length > 1 ? partes.slice(1).join(" / ").trim() : "";
+            proposal.suggestedObservacion = fallaExistente
+              ? `${oemObs} / ${fallaExistente}`
+              : oemObs;
+          }
+        }));
+      } catch (err) {
+        aiErrorOcurrido = err;
+        break;
+      }
+    }
+
+    if (aiErrorOcurrido) {
+      console.warn("Consulta de variantes técnicas detenida por error de IA:", aiErrorOcurrido.message || aiErrorOcurrido);
+      alert(`⚠️ Consulta de variantes por IA detenida:\n${aiErrorOcurrido.message || "Error de conexión con la IA de Gemini"}.\n\nSe calculó la relación 3:1 y demanda base con el motor local.`);
     }
 
     this.proposals = baseProposals;
@@ -11710,20 +11727,19 @@ Busca en manuales OEM oficiales si existen variantes técnicas de esta pieza par
 Responde con UN SOLO texto corto (máximo 120 caracteres) describiendo la variante técnica específica de esta pieza según el manual OEM. Si no existen variantes técnicas conocidas y documentadas en manuales OEM para esta pieza en este vehículo, responde exactamente con la cadena vacía "".
 
 No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
-    try {
-      const response = await window.callGeminiProxy("gemini-2.5-flash", {
-        contents: [{ parts: [{ text: prompt }] }],
-        tools: [{ googleSearch: {} }],
-        generationConfig: { maxOutputTokens: 256, temperature: 0.1 }
-      });
-      if (!response.ok) return "";
-      const data = await response.json();
-      const rawText = (data?.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("").trim().replace(/^"|"$/g, "");
-      if (!rawText || rawText === '""' || rawText.length < 4) return "";
-      return rawText.substring(0, 140);
-    } catch (e) {
-      return "";
+    const response = await window.callGeminiProxy("gemini-3.8-flash", {
+      contents: [{ parts: [{ text: prompt }] }],
+      tools: [{ googleSearch: {} }],
+      generationConfig: { maxOutputTokens: 256, temperature: 0.1 }
+    });
+    if (!response.ok) {
+      const errText = await response.text().catch(() => `HTTP ${response.status}`);
+      throw new Error(`Error ${response.status}: ${errText}`);
     }
+    const data = await response.json();
+    const rawText = (data?.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("").trim().replace(/^"|"$/g, "");
+    if (!rawText || rawText === '""' || rawText.length < 4) return "";
+    return rawText.substring(0, 140);
   }
 
   renderProposals() {

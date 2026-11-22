@@ -419,7 +419,7 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
       reqPayload.tools = [{ googleSearch: {} }];
     }
 
-    const res = await window.callGeminiProxy("gemini-2.0-flash", reqPayload);
+    const res = await window.callGeminiProxy("gemini-3.8-flash", reqPayload);
 
     if (!res || !res.ok) {
       const errText = await res.text().catch(() => `HTTP ${res?.status || "error"}`);
@@ -1520,7 +1520,7 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       });
       if (parts.length === 1) throw new Error("No hay imágenes válidas para enviar al análisis.");
 
-      const response = await window.callGeminiProxy("gemini-2.0-flash", {
+      const response = await window.callGeminiProxy("gemini-3.8-flash", {
         contents: [{ parts }],
         generationConfig: { maxOutputTokens: 2048, temperature: 0.1 }
       });

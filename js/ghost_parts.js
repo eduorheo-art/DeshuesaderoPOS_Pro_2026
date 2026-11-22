@@ -174,7 +174,7 @@ Responde ÚNICAMENTE un JSON válido con esta estructura (sin texto adicional fu
       let data = null;
 
       if (window.callGeminiProxy) {
-        const response = await window.callGeminiProxy("gemini-2.0-flash", {
+        const response = await window.callGeminiProxy("gemini-3.8-flash", {
           contents: [{
             parts: [
               { text: PROMPT_OEM_MANUALS },

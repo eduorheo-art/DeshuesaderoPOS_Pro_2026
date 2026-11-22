@@ -274,7 +274,7 @@ class AIRegisterManager {
           }
         });
       }
-      const response = await window.callGeminiProxy("gemini-2.0-flash", {
+      const response = await window.callGeminiProxy("gemini-3.8-flash", {
             contents: [{
               parts: [
                 { text: OEM_VISION_PROMPT },

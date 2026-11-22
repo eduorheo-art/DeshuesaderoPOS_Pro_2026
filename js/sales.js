@@ -1072,7 +1072,7 @@ Devuelve únicamente JSON con este formato:
       const mimeType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";")) || "image/jpeg";
       const rawBase64 = base64Data.split(",")[1];
 
-      const aiResponse = await window.callGeminiProxy("gemini-3.6-flash", {
+      const aiResponse = await window.callGeminiProxy("gemini-3.8-flash", {
         contents: [{
           parts: [
             { text: prompt },
