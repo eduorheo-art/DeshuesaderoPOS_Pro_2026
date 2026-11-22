@@ -78,13 +78,22 @@ Deno.serve(async request => {
     try {
       payload = JSON.parse(rawBody);
     } catch {
-      return jsonResponse(origin, 400, { error: "Invalid JSON" });
+      return jsonResponse(origin, 400, { error: { message: "Invalid JSON in request body", status: "INVALID_ARGUMENT" } });
     }
-    const models = new Set(["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.5-flash", "gemini-3.6-flash"]);
-    if (typeof payload.model !== "string" || !models.has(payload.model) ||
-        !payload.request || !Array.isArray(payload.request.contents)) {
-      return jsonResponse(origin, 400, { error: "Invalid AI request" });
+    const models = new Set(["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro"]);
+    if (typeof payload.model !== "string") {
+      return jsonResponse(origin, 400, { error: { message: "Field 'model' is required as a string", status: "INVALID_ARGUMENT" } });
     }
+    if (!models.has(payload.model)) {
+      return jsonResponse(origin, 400, { error: { message: `Model '${payload.model}' not supported. Available models: ${Array.from(models).join(", ")}`, status: "INVALID_ARGUMENT" } });
+    }
+    if (!payload.request || typeof payload.request !== "object") {
+      return jsonResponse(origin, 400, { error: { message: "Field 'request' is required as an object", status: "INVALID_ARGUMENT" } });
+    }
+    if (!Array.isArray(payload.request.contents)) {
+      return jsonResponse(origin, 400, { error: { message: "Field 'request.contents' must be an array", status: "INVALID_ARGUMENT" } });
+    }
+
     // Si la petición contiene imágenes (inlineData), Gemini rechaza tools (googleSearch) con 400
     const hasInlineData = payload.request.contents.some((c: any) =>
       Array.isArray(c?.parts) && c.parts.some((p: any) => p?.inlineData)
@@ -93,7 +102,7 @@ Deno.serve(async request => {
       delete (payload.request as any).tools;
     }
     const upstreamBody = JSON.stringify(payload.request);
-    if (!upstreamBody) return jsonResponse(origin, 400, { error: "Invalid AI request" });
+    if (!upstreamBody) return jsonResponse(origin, 400, { error: { message: "Could not serialize request body", status: "INVALID_ARGUMENT" } });
 
     const upstream = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${payload.model}:generateContent?key=${encodeURIComponent(geminiKey)}`,
@@ -104,7 +113,26 @@ Deno.serve(async request => {
         signal: AbortSignal.timeout(60000)
       }
     );
-    return new Response(await upstream.text(), {
+
+    const upstreamText = await upstream.text();
+
+    if (!upstream.ok) {
+      console.error(`Gemini upstream error (${upstream.status}) for model ${payload.model}:`, upstreamText);
+      try {
+        const errorJson = JSON.parse(upstreamText);
+        return jsonResponse(origin, upstream.status, errorJson);
+      } catch {
+        return jsonResponse(origin, upstream.status, {
+          error: {
+            code: upstream.status,
+            message: upstreamText || `HTTP ${upstream.status} from Gemini API`,
+            status: "UPSTREAM_ERROR"
+          }
+        });
+      }
+    }
+
+    return new Response(upstreamText, {
       status: upstream.status,
       headers: {
         ...corsHeaders(origin),
@@ -112,7 +140,14 @@ Deno.serve(async request => {
       }
     });
   } catch (error) {
-    console.error("Gemini proxy request failed:", error instanceof Error ? error.name : "unknown error");
-    return jsonResponse(origin, 502, { error: "AI request failed" });
+    const errorMsg = error instanceof Error ? error.message : "unknown error";
+    console.error("Gemini proxy request failed:", errorMsg);
+    return jsonResponse(origin, 502, {
+      error: {
+        code: 502,
+        message: `Gemini proxy error: ${errorMsg}`,
+        status: "PROXY_ERROR"
+      }
+    });
   }
 });

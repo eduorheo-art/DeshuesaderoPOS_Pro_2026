@@ -419,17 +419,11 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
       reqPayload.tools = [{ googleSearch: {} }];
     }
 
-    let res = null;
-    try {
-      res = await window.callGeminiProxy("gemini-2.0-flash", reqPayload);
-    } catch (proxyErr) {
-      console.warn("Fallo con gemini-2.0-flash, reintentando con modelo alternativo:", proxyErr);
-      if (reqPayload.tools) delete reqPayload.tools;
-      res = await window.callGeminiProxy("gemini-3.6-flash", reqPayload);
-    }
+    const res = await window.callGeminiProxy("gemini-2.0-flash", reqPayload);
 
     if (!res || !res.ok) {
-      throw new Error(`Gemini API error: ${res ? res.status : "Sin respuesta"}`);
+      const errText = await res.text().catch(() => `HTTP ${res?.status || "error"}`);
+      throw new Error(`Gemini API error (${res?.status}): ${errText}`);
     }
 
     const data = await res.json();
@@ -1526,7 +1520,7 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
       });
       if (parts.length === 1) throw new Error("No hay imágenes válidas para enviar al análisis.");
 
-      const response = await window.callGeminiProxy("gemini-3.6-flash", {
+      const response = await window.callGeminiProxy("gemini-2.0-flash", {
         contents: [{ parts }],
         generationConfig: { maxOutputTokens: 2048, temperature: 0.1 }
       });

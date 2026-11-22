@@ -3115,9 +3115,24 @@ window.callGeminiProxy = async (model, request) => {
     throw new Error("Se requiere sesión activa de Supabase para consultar la IA en el servidor.");
   }
 
-  const modelsToTry = [...new Set([model, "gemini-3.6-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"])].filter(Boolean);
-
+  const modelsToTry = [...new Set([model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"])].filter(Boolean);
   let lastError = null;
+
+  const extractErrorDetail = async (response) => {
+    try {
+      const errJson = await response.clone().json();
+      if (errJson?.error) {
+        const errObj = errJson.error;
+        const msg = errObj.message || (typeof errObj === "string" ? errObj : JSON.stringify(errObj));
+        const status = errObj.status ? ` [${errObj.status}]` : "";
+        return `${msg}${status}`;
+      }
+      return JSON.stringify(errJson);
+    } catch {
+      return await response.clone().text().catch(() => `HTTP ${response.status}`);
+    }
+  };
+
   for (const tryModel of modelsToTry) {
     let attempt = 0;
     while (attempt < 2) {
@@ -3137,6 +3152,10 @@ window.callGeminiProxy = async (model, request) => {
           return res;
         }
 
+        const errDetail = await extractErrorDetail(res);
+        lastError = new Error(`Gemini API error (${res.status}) [${tryModel}]: ${errDetail}`);
+        console.warn(`Llamada con ${tryModel} falló (${res.status}):`, errDetail);
+
         if (res.status === 400 && reqPayload.tools) {
           delete reqPayload.tools;
           const retryRes = await fetch(`${SUPABASE_URL}/functions/v1/gemini-proxy`, {
@@ -3149,15 +3168,16 @@ window.callGeminiProxy = async (model, request) => {
             body: JSON.stringify({ model: tryModel, request: reqPayload })
           });
           if (retryRes.ok) return retryRes;
+          const retryErrDetail = await extractErrorDetail(retryRes);
+          lastError = new Error(`Gemini API error (${retryRes.status}) [${tryModel} sin tools]: ${retryErrDetail}`);
+          console.warn(`Reintento sin tools con ${tryModel} falló (${retryRes.status}):`, retryErrDetail);
         }
 
         if (res.status === 503 || res.status === 429) {
-          if (attempt < 2) await new Promise(r => setTimeout(r, 1000));
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1200));
           else break;
-        } else if (res.status === 400) {
-          break; // probar siguiente modelo
         } else {
-          return res;
+          break; // Probar siguiente modelo del fallback
         }
       } catch (fetchErr) {
         lastError = fetchErr;
@@ -7634,17 +7654,11 @@ Responde ÚNICAMENTE con un array JSON válido sin bloques markdown ni texto adi
       reqPayload.tools = [{ googleSearch: {} }];
     }
 
-    let res = null;
-    try {
-      res = await window.callGeminiProxy("gemini-2.0-flash", reqPayload);
-    } catch (proxyErr) {
-      console.warn("Fallo con gemini-2.0-flash, reintentando con modelo alternativo:", proxyErr);
-      if (reqPayload.tools) delete reqPayload.tools;
-      res = await window.callGeminiProxy("gemini-3.6-flash", reqPayload);
-    }
+    const res = await window.callGeminiProxy("gemini-2.0-flash", reqPayload);
 
     if (!res || !res.ok) {
-      throw new Error(`Gemini API error: ${res ? res.status : "Sin respuesta"}`);
+      const errText = await res.text().catch(() => `HTTP ${res?.status || "error"}`);
+      throw new Error(`Gemini API error (${res?.status}): ${errText}`);
     }
 
     const data = await res.json();
