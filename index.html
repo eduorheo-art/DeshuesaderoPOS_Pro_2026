@@ -3079,48 +3079,6 @@
     <!-- ================= SCRIPTS DEL SISTEMA BUNDLED (TODO EN UNO) ================= -->
   <script>
 // ==========================================
-// SEGURIDAD DE CONSOLA Y PROTECCIÓN DE CÓDIGO
-// ==========================================
-(function() {
-  try {
-    console.log(
-      "%c⚠️ YONKEPOS PRO - CONSOLA DE DIAGNÓSTICO",
-      "color: #f59e0b; font-size: 13px; font-weight: bold;"
-    );
-    console.log(
-      "%cConsola habilitada para diagnóstico técnico. Funciones del sistema protegidas contra manipulación e inyección externa.",
-      "color: #94a3b8; font-size: 11px;"
-    );
-  } catch (_) {}
-
-  const _rawError = console.error.bind(console);
-  console.error = function(...args) {
-    const sanitized = args.map(arg => {
-      if (arg instanceof Error) {
-        return `[Diagnóstico]: ${arg.message || arg.name || 'Operación no completada'}`;
-      }
-      return arg;
-    });
-    _rawError(...sanitized);
-  };
-
-  window.addEventListener("error", function(e) {
-    if (e && e.message) {
-      console.warn(`[Diagnóstico]: ${e.message}`);
-    }
-    e.preventDefault();
-    return true;
-  });
-
-  window.addEventListener("unhandledrejection", function(e) {
-    const reason = e?.reason;
-    const msg = reason?.message || reason || "Operación asíncrona interrumpida";
-    console.warn(`[Diagnóstico]: ${msg}`);
-    e.preventDefault();
-  });
-})();
-
-// ==========================================
 // CONFIGURACIÓN GLOBAL DE SUPABASE (INICIO)
 // ==========================================
 const SUPABASE_URL = "https://lkivtjzcemvinymxrrvv.supabase.co";
@@ -13063,30 +13021,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     window.crossCompatibilityAIAdvisor = new CrossCompatibilityAIAdvisor();
-
-    // Blindaje de integridad del sistema contra alteración arbitraria desde consola
-    window.addEventListener("DOMContentLoaded", () => {
-      const systemGlobals = [
-        "yonkeDB",
-        "appManager",
-        "salesManager",
-        "vehicleValuatorManager",
-        "imagesManager",
-        "returnsManager",
-        "crossCompatibilityAIAdvisor"
-      ];
-      systemGlobals.forEach(name => {
-        if (window[name] && typeof window[name] === "object") {
-          try {
-            Object.seal(window[name]);
-            Object.defineProperty(window, name, {
-              configurable: false,
-              writable: false
-            });
-          } catch (_) {}
-        }
-      });
-    });
   </script>
 
   <!-- Capa de sync e importación (no reemplaza la lógica de ventas/cajas de Gemini y Claude) -->

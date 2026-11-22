@@ -1,44 +1,5 @@
 // security.js - Gestor de Instalación PWA y Compatibilidad para YonkePOS
 
-(function() {
-  try {
-    console.log(
-      "%c⚠️ YONKEPOS PRO - CONSOLA DE DIAGNÓSTICO",
-      "color: #f59e0b; font-size: 13px; font-weight: bold;"
-    );
-    console.log(
-      "%cConsola habilitada para diagnóstico técnico. Funciones del sistema protegidas contra manipulación e inyección externa.",
-      "color: #94a3b8; font-size: 11px;"
-    );
-  } catch (_) {}
-
-  const _rawError = console.error.bind(console);
-  console.error = function(...args) {
-    const sanitized = args.map(arg => {
-      if (arg instanceof Error) {
-        return `[Diagnóstico]: ${arg.message || arg.name || 'Operación no completada'}`;
-      }
-      return arg;
-    });
-    _rawError(...sanitized);
-  };
-
-  window.addEventListener("error", function(e) {
-    if (e && e.message) {
-      console.warn(`[Diagnóstico]: ${e.message}`);
-    }
-    e.preventDefault();
-    return true;
-  });
-
-  window.addEventListener("unhandledrejection", function(e) {
-    const reason = e?.reason;
-    const msg = reason?.message || reason || "Operación asíncrona interrumpida";
-    console.warn(`[Diagnóstico]: ${msg}`);
-    e.preventDefault();
-  });
-})();
-
 class SecurityManager {
   constructor() {
     this.deferredInstallPrompt = null;
