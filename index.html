@@ -12241,6 +12241,7 @@ ${JSON.stringify(items)}`;
     }
 
     let error429 = false;
+    let apiErrorMsg = "";
     let consultadas = 0;
     const batchSize = 15; // Lotes de 15 a 20 piezas para optimizar el consumo de cuota
     const totalBatches = Math.ceil(toFetch.length / batchSize);
@@ -12282,7 +12283,10 @@ ${JSON.stringify(items)}`;
           window.startAICooldownTimer(retrySec);
           break;
         } else {
+          apiErrorMsg = errMsg;
           console.warn(`Error al consultar variantes por lote:`, errMsg);
+          alert(`❌ Error al consultar variantes con IA:\n\n${errMsg}`);
+          break;
         }
       }
 
@@ -12299,7 +12303,7 @@ ${JSON.stringify(items)}`;
       window.appManager.renderInventoryTable();
     }
 
-    if (!error429) {
+    if (!error429 && !apiErrorMsg) {
       const cacheNote = resolvedFromCache > 0 ? `\n(${resolvedFromCache} piezas resueltas desde caché sin gastar cuota)` : "";
       alert(`✅ Consulta de variantes técnicas OEM completada.\nSe actualizaron las observaciones de ${consultadas} piezas con IA${cacheNote}, sin alterar precios ni otras columnas.`);
     }
