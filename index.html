@@ -3318,7 +3318,7 @@ window.callGeminiProxy = async (model, request) => {
 
         // REGLA 1: Ante un 429 (límite de cuota o rate limit), DETENER de inmediato el fallback de modelos
         // para no duplicar peticiones contra la API ni agotar la cuota del modelo de respaldo.
-        if (res.status === 429 || String(errDetail).includes("429") || String(errDetail).includes("RESOURCE_EXHAUSTED")) {
+        if (res.status === 429 || res.status === 401 || res.status === 403 || String(errDetail).includes("429") || String(errDetail).includes("RESOURCE_EXHAUSTED")) {
           throw lastError;
         }
 
@@ -3353,7 +3353,7 @@ window.callGeminiProxy = async (model, request) => {
       } catch (fetchErr) {
         lastError = fetchErr;
         // Si el error fue por 429, romper completamente y relanzar sin probar el modelo de respaldo
-        if (fetchErr.status === 429 || String(fetchErr.message || "").includes("429") || String(fetchErr.message || "").includes("RESOURCE_EXHAUSTED")) {
+        if (fetchErr.status === 429 || fetchErr.status === 401 || fetchErr.status === 403 || String(fetchErr.message || "").includes("429") || String(fetchErr.message || "").includes("RESOURCE_EXHAUSTED")) {
           throw fetchErr;
         }
         break;

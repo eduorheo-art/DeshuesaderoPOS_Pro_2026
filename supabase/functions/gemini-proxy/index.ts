@@ -35,8 +35,8 @@ Deno.serve(async request => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const geminiKeys = (Deno.env.get("GEMINI_API_KEY") || "")
-    .split(/[,\n]+/)
-    .map(k => k.trim())
+    .split(/[,\r\n;]+/)
+    .map(k => k.trim().replace(/^["']+|["']+$/g, "").trim())
     .filter(Boolean);
   const ownerUserId = Deno.env.get("YONKE_OWNER_USER_ID");
   if (!authorization?.startsWith("Bearer ") || !supabaseUrl || !anonKey || geminiKeys.length === 0 || !ownerUserId) {
@@ -113,10 +113,13 @@ Deno.serve(async request => {
     for (let i = 0; i < geminiKeys.length; i++) {
       const currentKey = geminiKeys[i];
       upstream = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${payload.model}:generateContent?key=${encodeURIComponent(currentKey)}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${payload.model}:generateContent`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": currentKey
+          },
           body: upstreamBody,
           signal: AbortSignal.timeout(60000)
         }
@@ -129,9 +132,10 @@ Deno.serve(async request => {
       }
 
       const isQuotaError = upstream.status === 429 || upstreamText.includes("RESOURCE_EXHAUSTED");
-      console.error(`Gemini upstream error (${upstream.status}) for model ${payload.model} [key ${i + 1}/${geminiKeys.length}]:`, upstreamText);
+      const isInvalidKeyError = upstream.status === 401 || upstreamText.includes("API_KEY_INVALID") || upstreamText.includes("UNAUTHENTICATED");
+      console.error(`Gemini upstream error (${upstream.status}) for model ${payload.model} [key ${i + 1}/${geminiKeys.length}, len=${currentKey.length}]:`, upstreamText);
 
-      if (isQuotaError && i < geminiKeys.length - 1) {
+      if ((isQuotaError || isInvalidKeyError) && i < geminiKeys.length - 1) {
         continue;
       }
 
