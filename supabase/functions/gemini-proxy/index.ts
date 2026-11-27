@@ -113,12 +113,11 @@ Deno.serve(async request => {
     for (let i = 0; i < geminiKeys.length; i++) {
       const currentKey = geminiKeys[i];
       upstream = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${payload.model}:generateContent`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${payload.model}:generateContent?key=${encodeURIComponent(currentKey)}`,
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": currentKey
+            "Content-Type": "application/json"
           },
           body: upstreamBody,
           signal: AbortSignal.timeout(60000)
