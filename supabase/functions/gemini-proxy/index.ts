@@ -34,9 +34,12 @@ Deno.serve(async request => {
   const authorization = request.headers.get("Authorization");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  const geminiKeys = (Deno.env.get("GEMINI_API_KEY") || "")
+    .split(/[,\n]+/)
+    .map(k => k.trim())
+    .filter(Boolean);
   const ownerUserId = Deno.env.get("YONKE_OWNER_USER_ID");
-  if (!authorization?.startsWith("Bearer ") || !supabaseUrl || !anonKey || !geminiKey || !ownerUserId) {
+  if (!authorization?.startsWith("Bearer ") || !supabaseUrl || !anonKey || geminiKeys.length === 0 || !ownerUserId) {
     return jsonResponse(origin, 503, { error: "AI service is not configured" });
   }
 
@@ -104,20 +107,34 @@ Deno.serve(async request => {
     const upstreamBody = JSON.stringify(payload.request);
     if (!upstreamBody) return jsonResponse(origin, 400, { error: { message: "Could not serialize request body", status: "INVALID_ARGUMENT" } });
 
-    const upstream = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${payload.model}:generateContent?key=${encodeURIComponent(geminiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: upstreamBody,
-        signal: AbortSignal.timeout(60000)
+    let upstream: Response | null = null;
+    let upstreamText = "";
+
+    for (let i = 0; i < geminiKeys.length; i++) {
+      const currentKey = geminiKeys[i];
+      upstream = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${payload.model}:generateContent?key=${encodeURIComponent(currentKey)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: upstreamBody,
+          signal: AbortSignal.timeout(60000)
+        }
+      );
+
+      upstreamText = await upstream.text();
+
+      if (upstream.ok) {
+        break;
       }
-    );
 
-    const upstreamText = await upstream.text();
+      const isQuotaError = upstream.status === 429 || upstreamText.includes("RESOURCE_EXHAUSTED");
+      console.error(`Gemini upstream error (${upstream.status}) for model ${payload.model} [key ${i + 1}/${geminiKeys.length}]:`, upstreamText);
 
-    if (!upstream.ok) {
-      console.error(`Gemini upstream error (${upstream.status}) for model ${payload.model}:`, upstreamText);
+      if (isQuotaError && i < geminiKeys.length - 1) {
+        continue;
+      }
+
       try {
         const errorJson = JSON.parse(upstreamText);
         return jsonResponse(origin, upstream.status, errorJson);
@@ -126,21 +143,22 @@ Deno.serve(async request => {
           error: {
             code: upstream.status,
             message: upstreamText || `HTTP ${upstream.status} from Gemini API`,
-            status: "UPSTREAM_ERROR"
+            status: isQuotaError ? "RESOURCE_EXHAUSTED" : "UPSTREAM_ERROR"
           }
         });
       }
     }
 
     return new Response(upstreamText, {
-      status: upstream.status,
+      status: upstream?.status || 200,
       headers: {
         ...corsHeaders(origin),
-        "Content-Type": upstream.headers.get("Content-Type") || "application/json"
+        "Content-Type": upstream?.headers.get("Content-Type") || "application/json"
       }
     });
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : "unknown error";
+    const rawMsg = error instanceof Error ? error.message : "unknown error";
+    const errorMsg = rawMsg.replace(/key=[^&\s]+/gi, "key=REDACTED");
     console.error("Gemini proxy request failed:", errorMsg);
     return jsonResponse(origin, 502, {
       error: {
