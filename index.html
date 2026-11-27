@@ -2199,6 +2199,16 @@
               <span class="text-slate-300">|</span>
               <button 
                 type="button"
+                id="ai-price-recheck-web-btn"
+                onclick="window.aiPriceUpdaterManager.runAnalysis({ forceRemote: true })"
+                class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1 cursor-pointer"
+                title="Forzar nueva búsqueda en internet con IA para compatibilidad y precios (ignora caché previa)"
+              >
+                <span>🔄</span>
+                <span>Reconsultar Precios Web</span>
+              </button>
+              <button 
+                type="button"
                 id="ai-price-fetch-variants-btn"
                 onclick="window.aiPriceUpdaterManager.fetchVariantsForSelected()"
                 class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1 cursor-pointer"
@@ -3163,6 +3173,7 @@ window.setAIButtonsDisabled = function(disabled) {
   const selectors = [
     "#ai-batch-pricing-btn",
     "#ai-variants-updater-btn",
+    "#ai-price-recheck-web-btn",
     "#ai-price-fetch-variants-btn",
     "#valuator-ai-inspection-btn",
     "button[onclick*='aiRegisterManager']",
@@ -11355,7 +11366,7 @@ class AIPriceUpdaterManager {
     const modal = document.getElementById("ai-price-update-modal");
     if (!modal) return;
     modal.classList.remove("hidden");
-    this.runAnalysis().then(() => {
+    this.runAnalysis({ skipRemotePriceAI: true }).then(() => {
       // Enfocar hacia el botón de consulta de variantes
       const btn = document.getElementById("ai-price-fetch-variants-btn");
       if (btn) {
@@ -11643,7 +11654,81 @@ class AIPriceUpdaterManager {
     };
   }
 
-  async runAnalysis() {
+  _loadPricingCache() {
+    try {
+      const raw = localStorage.getItem(this.ownerStorageKey("oem_pricing_compat_cache"));
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  _savePricingCache(cache) {
+    try {
+      localStorage.setItem(this.ownerStorageKey("oem_pricing_compat_cache"), JSON.stringify(cache || {}));
+    } catch (_) {}
+  }
+
+  _recalculateMinPrice3a1(suggestedBase, factorPieza) {
+    const base = Math.max(0, Number(suggestedBase) || 0);
+    let min3a1 = Math.round((base * factorPieza) / 50) * 50;
+    if (min3a1 >= base) min3a1 = Math.max(150, base - 100);
+    return Math.max(150, min3a1);
+  }
+
+  async _fetchBatchCompatAndPrices(batch) {
+    if (!batch || !batch.length) return {};
+    const items = batch.map(p => ({
+      id: p.id,
+      pieza: p.pieza || "",
+      vehiculo: p.vehiculo || "",
+      anio: p.anio || "",
+      precio_base_actual: p.currentBase || 0,
+      compatibilidad_actual: p.currentCompat || ""
+    }));
+
+    const prompt = `Usa Google Search para consultar precios vigentes en México de piezas usadas originales (OEM) y compatibilidad oficial en catálogos/manuales OEM por año y modelo.
+No calcules ni devuelvas precio mínimo (se calcula aparte). Estima demanda ("Alta", "Media" o "Baja") solo con respaldo de mercado.
+Devuelve ÚNICAMENTE un array JSON válido con esta estructura para cada id:
+[{"id":"...","precio_base":0,"compatibilidad":"...","fuente_manual":"nombre o URL de catálogo OEM","referencia_mercado":"plataforma y rango MXN o URL","demanda":"Alta|Media|Baja","busquedas_info":"resumen breve"}]
+Si no encuentras dato confiable para algún campo, déjalo en 0 o cadena vacía "".
+Piezas:
+${JSON.stringify(items)}`;
+
+    const response = await window.callGeminiProxy("gemini-3.8-flash", {
+      contents: [{ parts: [{ text: prompt }] }],
+      tools: [{ googleSearch: {} }],
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.1 }
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => `HTTP ${response.status}`);
+      const err = new Error(`Gemini API error (${response.status}): ${errText}`);
+      err.status = response.status;
+      err.errorDetail = errText;
+      throw err;
+    }
+
+    const data = await response.json();
+    const candidate = data?.candidates?.[0];
+    const rawText = (candidate?.content?.parts || []).map(p => p.text || "").join("").replace(/```json/gi, "").replace(/```/g, "").trim();
+    const resultsMap = {};
+    try {
+      const parsed = JSON.parse(rawText);
+      if (Array.isArray(parsed)) {
+        parsed.forEach(item => {
+          if (item?.id) resultsMap[String(item.id)] = item;
+        });
+      }
+    } catch (parseErr) {
+      console.warn("No se pudo parsear JSON de compatibilidad y precios:", parseErr, rawText);
+    }
+    return resultsMap;
+  }
+
+  async runAnalysis(options = {}) {
+    if (this.isAnalyzing) return;
     this.isAnalyzing = true;
     const loadingEl = document.getElementById("ai-price-loading");
     const contentEl = document.getElementById("ai-price-content");
@@ -11670,6 +11755,7 @@ class AIPriceUpdaterManager {
     const vehicles = window.yonkeDB ? window.yonkeDB.getVehicles() : [];
 
     if (!parts || parts.length === 0) {
+      this.isAnalyzing = false;
       alert(activeVehicle 
         ? `No hay piezas registradas para ${activeVehicle} en el inventario.` 
         : "No hay piezas en el inventario para analizar.");
@@ -11677,10 +11763,7 @@ class AIPriceUpdaterManager {
       return;
     }
 
-    if (countEl) countEl.textContent = `Analizando ${parts.length} piezas de ${activeVehicle || "inventario"} con relación 3:1, demanda y compatibilidad OEM...`;
-
-    // Pausa visual de consulta y procesamiento pericial
-    await new Promise(resolve => setTimeout(resolve, 300));
+    if (countEl) countEl.textContent = `Analizando ${parts.length} piezas de ${activeVehicle || "inventario"} con relación 3:1 local y búsqueda OEM...`;
 
     // Mapear costos de vehículos por modelo/id para la distribución exacta de 3:1
     const vehicleCostMap = new Map();
@@ -11701,7 +11784,13 @@ class AIPriceUpdaterManager {
       vehiclePartsMap.get(vKey).push(part);
     });
 
-    // Etapa 1: Construir propuestas base con relación 3:1, demanda y compatibilidad OEM (sin llamadas masivas a IA)
+    const pricingCache = this._loadPricingCache();
+    const forceRemote = Boolean(options.forceRemote);
+    const skipRemotePriceAI = Boolean(options.skipRemotePriceAI);
+    const toFetchRemote = [];
+    let resolvedFromCache = 0;
+
+    // Construir propuestas base: Precio Mínimo 3:1 siempre 100% local
     const baseProposals = parts.map(part => {
       const currentBase = Number(part.precio_base) || 0;
       const currentMin = Number(part.precio_minimo) || 0;
@@ -11724,21 +11813,40 @@ class AIPriceUpdaterManager {
       if (factorConservacion3a1 < 0.60) factorConservacion3a1 = 0.68;
       if (factorConservacion3a1 > 0.90) factorConservacion3a1 = 0.88;
 
-      let factorPieza = factorConservacion3a1;
-      if (demandData.demanda === "Alta") {
-        factorPieza = Math.min(0.88, Math.max(0.78, factorConservacion3a1 * 1.08));
-      } else if (demandData.demanda === "Baja") {
-        factorPieza = Math.min(0.72, Math.max(0.52, factorConservacion3a1 * 0.85));
-      } else {
-        factorPieza = Math.min(0.82, Math.max(0.68, factorConservacion3a1));
+      const calcFactorPieza = (dem) => {
+        if (dem === "Alta") return Math.min(0.88, Math.max(0.78, factorConservacion3a1 * 1.08));
+        if (dem === "Baja") return Math.min(0.72, Math.max(0.52, factorConservacion3a1 * 0.85));
+        return Math.min(0.82, Math.max(0.68, factorConservacion3a1));
+      };
+
+      let factorPieza = calcFactorPieza(demandData.demanda);
+      let suggestedBase = oemPriceRef.suggestedBase;
+      let suggestedCompat = oemCompatRef.compatibilidad;
+      let fuenteManual = oemCompatRef.fuenteManual;
+      let marketReference = oemPriceRef.marketReference;
+      let demanda = demandData.demanda;
+      let busquedas_info = demandData.busquedas_info;
+
+      const cacheKey = this._getVariantCacheKey(part);
+      const cached = !forceRemote ? pricingCache[cacheKey] : null;
+      if (cached && typeof cached === "object") {
+        if (Number(cached.precio_base) > 0) suggestedBase = Math.round(Number(cached.precio_base) / 50) * 50;
+        if (cached.compatibilidad) suggestedCompat = cached.compatibilidad;
+        if (cached.fuente_manual) fuenteManual = cached.fuente_manual;
+        if (cached.referencia_mercado) marketReference = cached.referencia_mercado;
+        if (cached.demanda) {
+          demanda = cached.demanda;
+          factorPieza = calcFactorPieza(demanda);
+        }
+        if (cached.busquedas_info) busquedas_info = cached.busquedas_info;
+        resolvedFromCache++;
       }
 
-      let suggestedMin3a1 = Math.round((oemPriceRef.suggestedBase * factorPieza) / 50) * 50;
-      if (suggestedMin3a1 >= oemPriceRef.suggestedBase) suggestedMin3a1 = Math.max(150, oemPriceRef.suggestedBase - 100);
-      suggestedMin3a1 = Math.max(150, suggestedMin3a1);
+      const suggestedMin3a1 = this._recalculateMinPrice3a1(suggestedBase, factorPieza);
 
-      return {
+      const proposal = {
         _part: part,
+        _calcFactorPieza: calcFactorPieza,
         id: part.id,
         pieza: part.pieza || "Sin nombre",
         vehiculo: part.vehiculo_origen || "Sin vehículo",
@@ -11747,19 +11855,96 @@ class AIPriceUpdaterManager {
         currentMin,
         currentCompat: currentCompat || "Sin compatibilidad registrada",
         currentObs,
-        suggestedBase: oemPriceRef.suggestedBase,
+        suggestedBase,
         suggestedMin: suggestedMin3a1,
-        suggestedCompat: oemCompatRef.compatibilidad,
+        suggestedCompat,
         suggestedObservacion: "",
-        fuenteManual: oemCompatRef.fuenteManual,
-        marketReference: oemPriceRef.marketReference,
-        diffBase: oemPriceRef.suggestedBase - currentBase,
-        demanda: demandData.demanda,
-        busquedas_info: demandData.busquedas_info,
-        badgeColor: demandData.badgeColor,
+        fuenteManual,
+        marketReference,
+        diffBase: suggestedBase - currentBase,
+        demanda,
+        busquedas_info,
+        badgeColor: demanda === "Alta" ? "emerald" : (demanda === "Media" ? "blue" : "slate"),
         selected: true
       };
+
+      if (!cached && !skipRemotePriceAI) {
+        toFetchRemote.push(proposal);
+      }
+      return proposal;
     });
+
+    // Etapa 1 web: consultar en internet con googleSearch solo piezas no cacheadas (lotes de 15, pausa 6s si >1 lote)
+    let error429 = false;
+    if (toFetchRemote.length > 0) {
+      const batchSize = 15;
+      const totalBatches = Math.ceil(toFetchRemote.length / batchSize);
+      for (let b = 0; b < toFetchRemote.length; b += batchSize) {
+        const batchIndex = Math.floor(b / batchSize);
+        const currentBatch = toFetchRemote.slice(b, b + batchSize);
+
+        if (batchIndex > 0) {
+          if (countEl) countEl.textContent = `Pausa de 6s entre lotes... (Lote ${batchIndex + 1} de ${totalBatches})`;
+          await new Promise(r => setTimeout(r, 6000));
+        }
+
+        if (countEl) countEl.textContent = `Consultando compatibilidad y precios reales en internet: lote ${batchIndex + 1} de ${totalBatches} (${currentBatch.length} piezas)...`;
+
+        try {
+          const remoteMap = await this._fetchBatchCompatAndPrices(currentBatch);
+          currentBatch.forEach(p => {
+            const remote = remoteMap[String(p.id)];
+            if (!remote) return;
+            const cacheEntry = {};
+            if (Number(remote.precio_base) > 0) {
+              p.suggestedBase = Math.round(Number(remote.precio_base) / 50) * 50;
+              p.diffBase = p.suggestedBase - p.currentBase;
+              cacheEntry.precio_base = p.suggestedBase;
+            }
+            if (typeof remote.compatibilidad === "string" && remote.compatibilidad.trim()) {
+              p.suggestedCompat = remote.compatibilidad.trim();
+              cacheEntry.compatibilidad = p.suggestedCompat;
+            }
+            if (typeof remote.fuente_manual === "string" && remote.fuente_manual.trim()) {
+              p.fuenteManual = remote.fuente_manual.trim();
+              cacheEntry.fuente_manual = p.fuenteManual;
+            }
+            if (typeof remote.referencia_mercado === "string" && remote.referencia_mercado.trim()) {
+              p.marketReference = remote.referencia_mercado.trim();
+              cacheEntry.referencia_mercado = p.marketReference;
+            }
+            if (remote.demanda === "Alta" || remote.demanda === "Media" || remote.demanda === "Baja") {
+              p.demanda = remote.demanda;
+              p.badgeColor = p.demanda === "Alta" ? "emerald" : (p.demanda === "Media" ? "blue" : "slate");
+              cacheEntry.demanda = p.demanda;
+            }
+            if (typeof remote.busquedas_info === "string" && remote.busquedas_info.trim()) {
+              p.busquedas_info = remote.busquedas_info.trim();
+              cacheEntry.busquedas_info = p.busquedas_info;
+            }
+            // Recalcular Precio Mínimo 3:1 siempre 100% local
+            const fp = p._calcFactorPieza(p.demanda);
+            p.suggestedMin = this._recalculateMinPrice3a1(p.suggestedBase, fp);
+
+            if (Object.keys(cacheEntry).length > 0) {
+              pricingCache[this._getVariantCacheKey(p._part)] = cacheEntry;
+            }
+          });
+          this._savePricingCache(pricingCache);
+        } catch (err) {
+          const errMsg = String(err?.message || err?.errorDetail || err || "");
+          if (err?.status === 429 || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Too Many Requests")) {
+            error429 = true;
+            const retrySec = window.extractRetrySecondsFromError(err);
+            alert(`⚠️ Límite de cuota alcanzado (Error 429: RESOURCE_EXHAUSTED).\n\n${errMsg}\n\nSe muestran los cálculos locales 3:1${resolvedFromCache ? ` y ${resolvedFromCache} piezas desde caché` : ""}.`);
+            window.startAICooldownTimer(retrySec);
+            break;
+          } else {
+            console.warn("Error al consultar compatibilidad y precios en internet:", errMsg);
+          }
+        }
+      }
+    }
 
     this.proposals = baseProposals;
 
@@ -11769,6 +11954,9 @@ class AIPriceUpdaterManager {
     if (actionsEl) actionsEl.classList.remove("hidden");
 
     this.renderProposals();
+    if (!error429 && !skipRemotePriceAI && toFetchRemote.length === 0 && resolvedFromCache > 0 && countEl) {
+      countEl.textContent = `${this.proposals.length} refacciones analizadas (${resolvedFromCache} desde caché sin gastar cuota | Precio Mínimo 3:1 local)`;
+    }
   }
 
   // --- COMPATIBILIDAD CRUZADA OFICIAL OEM ---
