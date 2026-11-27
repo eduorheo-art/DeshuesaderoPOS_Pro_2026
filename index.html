@@ -2014,6 +2014,15 @@
             <span>🤖</span>
             <span>Actualización de Compatibilidad y Precio</span>
           </button>
+          <button 
+            id="ai-variants-updater-btn"
+            onclick="window.aiPriceUpdaterManager.openVariantsModal()"
+            class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 cursor-pointer"
+            title="Etapa 2: Consultar Variantes Técnicas OEM con IA y guardar exclusivamente en Observación"
+          >
+            <span>🔍</span>
+            <span>Consultar Variantes con IA</span>
+          </button>
         </div>
       </div>
 
@@ -2170,7 +2179,7 @@
             <p class="text-[11px] leading-relaxed text-amber-900/90">
               A continuación se muestra el análisis comparando tus datos actuales contra los <strong>manuales técnicos oficiales de fábrica</strong> y referencias de mercado para refacciones <strong>originales (OEM)</strong>. Ningún cambio se guardará en tu base de datos hasta que elijas una de las opciones de aprobación abajo.
             </p>
-            <div class="flex items-center gap-3 pt-1 text-[11px] font-bold">
+            <div class="flex flex-wrap items-center gap-3 pt-1 text-[11px] font-bold">
               <span id="ai-price-item-count" class="text-indigo-800 bg-indigo-100/80 px-2 py-0.5 rounded">0 piezas</span>
               <button 
                 type="button" 
@@ -2186,6 +2195,17 @@
                 class="text-indigo-600 hover:underline font-bold cursor-pointer"
               >
                 Desmarcar todas
+              </button>
+              <span class="text-slate-300">|</span>
+              <button 
+                type="button"
+                id="ai-price-fetch-variants-btn"
+                onclick="window.aiPriceUpdaterManager.fetchVariantsForSelected()"
+                class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1 cursor-pointer"
+                title="Etapa 2: Consultar con IA únicamente las variantes técnicas para las piezas marcadas (guarda exclusivamente en Observación/Falla)"
+              >
+                <span>🔍</span>
+                <span>Consultar Variantes con IA</span>
               </button>
             </div>
           </div>
@@ -2211,6 +2231,7 @@
                   <th class="py-2.5 px-3">Compatibilidad Oficial (Manuales de Fabricante)</th>
                   <th class="py-2.5 px-3">Precio Base (Actual ➔ Sugerido)</th>
                   <th class="py-2.5 px-3">Precio Mínimo (Actual ➔ Sugerido)</th>
+                  <th class="py-2.5 px-3">Variante Técnica (Observación)</th>
                   <th class="py-2.5 px-3">Referencia Mercado Digital OEM</th>
                 </tr>
               </thead>
@@ -11199,6 +11220,21 @@ class AIPriceUpdaterManager {
     this.runAnalysis();
   }
 
+  openVariantsModal() {
+    const modal = document.getElementById("ai-price-update-modal");
+    if (!modal) return;
+    modal.classList.remove("hidden");
+    this.runAnalysis().then(() => {
+      // Enfocar hacia el botón de consulta de variantes
+      const btn = document.getElementById("ai-price-fetch-variants-btn");
+      if (btn) {
+        btn.scrollIntoView({ behavior: "smooth", block: "center" });
+        btn.classList.add("ring-4", "ring-purple-400");
+        setTimeout(() => btn.classList.remove("ring-4", "ring-purple-400"), 2500);
+      }
+    });
+  }
+
   closeModal() {
     const modal = document.getElementById("ai-price-update-modal");
     if (modal) modal.classList.add("hidden");
@@ -11279,7 +11315,7 @@ class AIPriceUpdaterManager {
 
     for (let offset = 0; offset < parts.length; offset += 20) {
       if (offset > 0) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 6000));
       }
       const batch = parts.slice(offset, offset + 20);
       const inventory = batch.map((part) => ({
@@ -11487,19 +11523,33 @@ class AIPriceUpdaterManager {
     if (contentEl) contentEl.classList.add("hidden");
     if (actionsEl) actionsEl.classList.add("hidden");
 
-    const parts = window.yonkeDB ? window.yonkeDB.getParts() : [];
+    let allParts = window.yonkeDB ? window.yonkeDB.getParts() : [];
+    let parts = allParts;
+    const activeVehicle = window.appManager?.inventoryVehicle;
+    if (activeVehicle) {
+      const normActive = String(activeVehicle).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      parts = allParts.filter(part => {
+        const normPart = String(part.vehiculo_origen || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return normPart === normActive;
+      });
+      if (window.appManager?.selectedInventoryYardBusiness && window.appManager.selectedInventoryYardBusiness !== "TODOS") {
+        parts = parts.filter(p => (p.negocio || "FaceCar") === window.appManager.selectedInventoryYardBusiness);
+      }
+    }
     const vehicles = window.yonkeDB ? window.yonkeDB.getVehicles() : [];
 
     if (!parts || parts.length === 0) {
-      alert("No hay piezas en el inventario para analizar.");
+      alert(activeVehicle 
+        ? `No hay piezas registradas para ${activeVehicle} en el inventario.` 
+        : "No hay piezas en el inventario para analizar.");
       this.closeModal();
       return;
     }
 
-    if (countEl) countEl.textContent = `Analizando ${parts.length} piezas con relación 3:1, probabilidad de demanda y variantes técnicas OEM...`;
+    if (countEl) countEl.textContent = `Analizando ${parts.length} piezas de ${activeVehicle || "inventario"} con relación 3:1, demanda y compatibilidad OEM...`;
 
     // Pausa visual de consulta y procesamiento pericial
-    await new Promise(resolve => setTimeout(resolve, 600));
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     // Mapear costos de vehículos por modelo/id para la distribución exacta de 3:1
     const vehicleCostMap = new Map();
@@ -11520,7 +11570,7 @@ class AIPriceUpdaterManager {
       vehiclePartsMap.get(vKey).push(part);
     });
 
-    // Construir propuestas base (sin IA) y luego enriquecer con observación OEM en paralelo
+    // Etapa 1: Construir propuestas base con relación 3:1, demanda y compatibilidad OEM (sin llamadas masivas a IA)
     const baseProposals = parts.map(part => {
       const currentBase = Number(part.precio_base) || 0;
       const currentMin = Number(part.precio_minimo) || 0;
@@ -11579,42 +11629,6 @@ class AIPriceUpdaterManager {
         selected: true
       };
     });
-
-    // Enriquecer con observaciones OEM vía IA (lotes controlados con pausa para evitar 429)
-    if (countEl) countEl.textContent = `Consultando variantes técnicas OEM en manuales de fabricante...`;
-    const chunkSize = 2;
-    let aiErrorOcurrido = null;
-    for (let i = 0; i < baseProposals.length; i += chunkSize) {
-      if (aiErrorOcurrido) break;
-      if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      }
-      const chunk = baseProposals.slice(i, i + chunkSize);
-      try {
-        await Promise.all(chunk.map(async proposal => {
-          if (aiErrorOcurrido) return;
-          const oemObs = await this._fetchOEMVersionObservation(proposal._part);
-          if (oemObs) {
-            // La observación OEM va ANTES de la barra separadora /
-            // Si hay falla/garantía previa, se conserva después del separador
-            const existingObs = proposal.currentObs;
-            const partes = existingObs.split(" / ");
-            const fallaExistente = partes.length > 1 ? partes.slice(1).join(" / ").trim() : "";
-            proposal.suggestedObservacion = fallaExistente
-              ? `${oemObs} / ${fallaExistente}`
-              : oemObs;
-          }
-        }));
-      } catch (err) {
-        aiErrorOcurrido = err;
-        break;
-      }
-    }
-
-    if (aiErrorOcurrido) {
-      console.warn("Consulta de variantes técnicas detenida por error de IA:", aiErrorOcurrido.message || aiErrorOcurrido);
-      alert(`⚠️ Consulta de variantes por IA detenida:\n${aiErrorOcurrido.message || "Error de conexión con la IA de Gemini"}.\n\nSe calculó la relación 3:1 y demanda base con el motor local.`);
-    }
 
     this.proposals = baseProposals;
 
@@ -11766,6 +11780,91 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
     return rawText.substring(0, 140);
   }
 
+  // --- ETAPA 2: CONSULTA DE VARIANTES TÉCNICAS OEM CON IA (BAJO DEMANDA) ---
+  async fetchVariantsForSelected() {
+    const selected = this.proposals.filter(p => p.selected);
+    if (!selected.length) {
+      alert("⚠️ No tienes ninguna pieza seleccionada para consultar variantes. Marca las casillas de las piezas que deseas consultar.");
+      return;
+    }
+
+    const btn = document.getElementById("ai-price-fetch-variants-btn");
+    const countEl = document.getElementById("ai-price-item-count");
+    const originalBtnText = btn ? btn.innerHTML : "";
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add("opacity-50", "cursor-not-allowed");
+    }
+
+    let error429 = false;
+    let consultadas = 0;
+
+    // Llamadas estrictamente secuenciales (una a la vez, nunca Promise.all)
+    for (let i = 0; i < selected.length; i++) {
+      const proposal = selected[i];
+      if (countEl) {
+        countEl.textContent = `Consultando variante ${i + 1} de ${selected.length}: ${proposal.pieza}...`;
+      }
+
+      // Pausa obligatoria de 6 segundos entre peticiones secuenciales para evitar 429
+      if (i > 0) {
+        await new Promise(r => setTimeout(r, 6000));
+      }
+
+      try {
+        const oemObs = await this._fetchOEMVersionObservation(proposal._part);
+        if (oemObs) {
+          proposal.suggestedObservacion = oemObs;
+
+          // REGLA ESTRICTA DE GUARDADO:
+          // Escribir/anexar exclusivamente en la columna observacion (preservando texto previo)
+          const existingObs = (proposal._part.observacion || "").trim();
+          let nuevaObs = oemObs;
+          if (existingObs) {
+            const partes = existingObs.split(" / ");
+            const fallaExistente = partes.length > 1 ? partes.slice(1).join(" / ").trim() : (partes[0] || "");
+            nuevaObs = fallaExistente && !fallaExistente.toLowerCase().includes(oemObs.toLowerCase())
+              ? `${oemObs} / ${fallaExistente}`
+              : oemObs;
+          }
+
+          // Persistir EXCLUSIVAMENTE el campo observacion en DB
+          // Ninguna otra columna (PRECIO BASE, PRECIO MÍNIMO, COSTO, etc.) se modifica
+          window.yonkeDB.updatePart(proposal.id, {
+            observacion: nuevaObs
+          });
+          proposal._part.observacion = nuevaObs;
+          consultadas++;
+        }
+      } catch (err) {
+        const errMsg = String(err?.message || err || "");
+        if (errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Too Many Requests")) {
+          error429 = true;
+          alert("⚠️ Límite de cuota por minuto alcanzado (Error 429: RESOURCE_EXHAUSTED).\n\nEl ciclo de consulta de variantes se detuvo de inmediato para proteger tu cuota de Gemini sin sobrescribir datos. Podrás continuar en un minuto con las piezas restantes.");
+          break;
+        } else {
+          console.warn(`Error al consultar variante para ${proposal.pieza}:`, errMsg);
+        }
+      }
+
+      this.renderProposals();
+    }
+
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("opacity-50", "cursor-not-allowed");
+      btn.innerHTML = originalBtnText;
+    }
+
+    if (window.appManager?.renderInventoryTable) {
+      window.appManager.renderInventoryTable();
+    }
+
+    if (!error429) {
+      alert(`✅ Consulta de variantes técnicas OEM completada.\nSe actualizaron las observaciones de ${consultadas} piezas sin alterar ninguna otra columna de la tabla.`);
+    }
+  }
+
   renderProposals() {
     const tbody = document.getElementById("ai-price-proposals-tbody");
     const countEl = document.getElementById("ai-price-item-count");
@@ -11793,6 +11892,8 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
       } else {
         badgeDemandaHtml = `<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">Baja</span>`;
       }
+
+      const observacionDisplay = p.suggestedObservacion || p.currentObs || "";
 
       html += `
         <tr class="border-b border-slate-100 hover:bg-slate-50/80 text-xs transition ${p.selected ? 'bg-indigo-50/30' : 'opacity-60'}">
@@ -11839,6 +11940,20 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
               <span class="font-black text-amber-700 text-xs">$${p.suggestedMin.toLocaleString()}</span>
             </div>
             <span class="text-[10px] text-amber-600 font-bold block mt-0.5">Amortiza 3:1 s/ Costo</span>
+          </td>
+          <td class="py-2.5 px-3 align-top text-[11px] min-w-[190px]">
+            ${p.suggestedObservacion ? `
+              <div class="space-y-1">
+                <span class="text-indigo-950 font-bold block bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
+                  🔍 ${p.suggestedObservacion}
+                </span>
+                <span class="text-[10px] text-emerald-700 font-semibold block">✓ Guardado en Observación</span>
+              </div>
+            ` : (observacionDisplay ? `
+              <span class="text-slate-700 block">${observacionDisplay}</span>
+            ` : `
+              <span class="text-slate-400 italic block">Sin variante registrada</span>
+            `)}
           </td>
           <td class="py-2.5 px-3 align-top text-[11px] text-slate-600 min-w-[180px]">
             <span class="font-medium bg-white px-2 py-1 rounded border border-slate-200 block text-slate-700">
