@@ -2207,6 +2207,14 @@
                 <span>🔍</span>
                 <span>Consultar Variantes con IA</span>
               </button>
+              <label class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 cursor-pointer select-none" title="Desactivado por defecto para ahorrar cuota de búsqueda web por minuto">
+                <input type="checkbox" id="ai-price-variants-web-chk" class="w-3.5 h-3.5 text-purple-600 rounded border-slate-300 cursor-pointer" />
+                <span>Búsqueda web</span>
+              </label>
+              <label class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 cursor-pointer select-none" title="Ignora variantes guardadas previamente en caché y vuelve a consultar a la IA">
+                <input type="checkbox" id="ai-price-force-variants-chk" class="w-3.5 h-3.5 text-purple-600 rounded border-slate-300 cursor-pointer" />
+                <span>Forzar nueva consulta</span>
+              </label>
             </div>
           </div>
         </div>
@@ -11903,8 +11911,46 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
     return rawText.substring(0, 140);
   }
 
+  _getVariantCacheKey(part) {
+    const norm = v => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return `${norm(part?.vehiculo_origen || part?.vehiculo)}|${norm(part?.anio)}|${norm(part?.pieza)}`;
+  }
+
+  _loadVariantsCache() {
+    try {
+      const raw = localStorage.getItem(this.ownerStorageKey("oem_variants_cache"));
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  _saveVariantsCache(cache) {
+    try {
+      localStorage.setItem(this.ownerStorageKey("oem_variants_cache"), JSON.stringify(cache || {}));
+    } catch (_) {}
+  }
+
+  _applyVariantObservation(proposal, oemObs) {
+    if (!proposal || !oemObs) return;
+    proposal.suggestedObservacion = oemObs;
+    const existingObs = (proposal._part?.observacion || "").trim();
+    let nuevaObs = oemObs;
+    if (existingObs) {
+      const partes = existingObs.split(" / ");
+      const fallaExistente = partes.length > 1 ? partes.slice(1).join(" / ").trim() : (partes[0] || "");
+      nuevaObs = fallaExistente && !fallaExistente.toLowerCase().includes(oemObs.toLowerCase())
+        ? `${oemObs} / ${fallaExistente}`
+        : oemObs;
+    }
+    window.yonkeDB.updatePart(proposal.id, { observacion: nuevaObs });
+    if (proposal._part) proposal._part.observacion = nuevaObs;
+    proposal.currentObs = nuevaObs;
+  }
+
   // --- CONSULTA POR LOTES DE VARIANTES TÉCNICAS OEM (15 A 20 PIEZAS POR LLAMADA) ---
-  async _fetchBatchOEMVersionObservations(batch) {
+  async _fetchBatchOEMVersionObservations(batch, useWebSearch = false) {
     if (!batch || !batch.length) return {};
     const items = batch.map(p => ({
       id: p.id,
@@ -11916,18 +11962,22 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
     const prompt = `Eres un técnico automotriz experto en manuales de taller OEM oficiales.
 Tu única fuente permitida son manuales de taller del fabricante (Ford Motorcraft, GM ACDelco, Nissan FAST, Toyota TIS, VW ETKA, etc.) y boletines técnicos oficiales (TSB). Queda estrictamente prohibido usar foros, blogs o fuentes no oficiales.
 
-Para cada una de las siguientes piezas automotrices, busca en manuales OEM si existen variantes técnicas documentadas (ejemplos: motor con distribución de cadena vs banda, transmisión 5vel vs 6vel, con o sin turbo, sensor 3 pines vs 4 pines, polea 5 vs 6 canales, etc.).
+Para cada una de las siguientes piezas automotrices, indica si existen variantes técnicas documentadas en manuales OEM (ejemplos: motor con distribución de cadena vs banda, transmisión 5vel vs 6vel, con o sin turbo, sensor 3 pines vs 4 pines, polea 5 vs 6 canales, etc.).
 Devuelve ÚNICAMENTE un array JSON válido con la forma:
 [{"id": "...", "variante": "descripción técnica corta máx 120 caracteres o vacía si no hay variantes documentadas"}]
 
 Piezas a verificar:
 ${JSON.stringify(items)}`;
 
-    const response = await window.callGeminiProxy("gemini-3.8-flash", {
+    const requestBody = {
       contents: [{ parts: [{ text: prompt }] }],
-      tools: [{ googleSearch: {} }],
       generationConfig: { maxOutputTokens: 2048, temperature: 0.1 }
-    });
+    };
+    if (useWebSearch) {
+      requestBody.tools = [{ googleSearch: {} }];
+    }
+
+    const response = await window.callGeminiProxy("gemini-3.8-flash", requestBody);
 
     if (!response.ok) {
       const errText = await response.text().catch(() => `HTTP ${response.status}`);
@@ -11967,6 +12017,33 @@ ${JSON.stringify(items)}`;
       return;
     }
 
+    const useWebSearch = Boolean(document.getElementById("ai-price-variants-web-chk")?.checked);
+    const forceRefresh = Boolean(document.getElementById("ai-price-force-variants-chk")?.checked);
+    const variantsCache = this._loadVariantsCache();
+
+    let resolvedFromCache = 0;
+    const toFetch = [];
+
+    selected.forEach(proposal => {
+      const cacheKey = this._getVariantCacheKey(proposal._part || proposal);
+      const cachedVariant = variantsCache[cacheKey] || proposal.suggestedObservacion || "";
+      if (!forceRefresh && cachedVariant) {
+        this._applyVariantObservation(proposal, cachedVariant);
+        resolvedFromCache++;
+      } else {
+        toFetch.push(proposal);
+      }
+    });
+
+    if (toFetch.length === 0) {
+      this.renderProposals();
+      if (window.appManager?.renderInventoryTable) {
+        window.appManager.renderInventoryTable();
+      }
+      alert(`✅ ${resolvedFromCache} piezas resueltas desde caché previa sin gastar cuota de IA. Marca "Forzar nueva consulta" si deseas reconsultar.`);
+      return;
+    }
+
     const btn = document.getElementById("ai-price-fetch-variants-btn");
     const countEl = document.getElementById("ai-price-item-count");
     const originalBtnText = btn ? btn.innerHTML : "";
@@ -11978,11 +12055,11 @@ ${JSON.stringify(items)}`;
     let error429 = false;
     let consultadas = 0;
     const batchSize = 15; // Lotes de 15 a 20 piezas para optimizar el consumo de cuota
-    const totalBatches = Math.ceil(selected.length / batchSize);
+    const totalBatches = Math.ceil(toFetch.length / batchSize);
 
-    for (let b = 0; b < selected.length; b += batchSize) {
+    for (let b = 0; b < toFetch.length; b += batchSize) {
       const batchIndex = Math.floor(b / batchSize);
-      const currentBatch = selected.slice(b, b + batchSize);
+      const currentBatch = toFetch.slice(b, b + batchSize);
 
       // Mantener la pausa obligatoria de 6 segundos solo si hay más de un lote (entre lote y lote)
       if (batchIndex > 0) {
@@ -11993,45 +12070,27 @@ ${JSON.stringify(items)}`;
       }
 
       if (countEl) {
-        countEl.textContent = `Consultando variantes con IA: lote ${batchIndex + 1} de ${totalBatches} (${currentBatch.length} piezas)...`;
+        countEl.textContent = `Consultando variantes con IA${useWebSearch ? " (web)" : ""}: lote ${batchIndex + 1} de ${totalBatches} (${currentBatch.length} piezas)...`;
       }
 
       try {
-        const variantsMap = await this._fetchBatchOEMVersionObservations(currentBatch);
+        const variantsMap = await this._fetchBatchOEMVersionObservations(currentBatch, useWebSearch);
         currentBatch.forEach(proposal => {
           const oemObs = variantsMap[String(proposal.id)];
           if (oemObs) {
-            proposal.suggestedObservacion = oemObs;
-
-            // REGLA ESTRICTA DE GUARDADO:
-            // Escribir/anexar exclusivamente en la columna observacion (preservando texto previo)
-            const existingObs = (proposal._part.observacion || "").trim();
-            let nuevaObs = oemObs;
-            if (existingObs) {
-              const partes = existingObs.split(" / ");
-              const fallaExistente = partes.length > 1 ? partes.slice(1).join(" / ").trim() : (partes[0] || "");
-              nuevaObs = fallaExistente && !fallaExistente.toLowerCase().includes(oemObs.toLowerCase())
-                ? `${oemObs} / ${fallaExistente}`
-                : oemObs;
-            }
-
-            // Persistir EXCLUSIVAMENTE el campo observacion en DB
-            // Ninguna otra columna (PRECIO BASE, PRECIO MÍNIMO, COSTO, etc.) se modifica
-            window.yonkeDB.updatePart(proposal.id, {
-              observacion: nuevaObs
-            });
-            proposal._part.observacion = nuevaObs;
+            const cacheKey = this._getVariantCacheKey(proposal._part || proposal);
+            variantsCache[cacheKey] = oemObs;
+            this._applyVariantObservation(proposal, oemObs);
             consultadas++;
           }
         });
+        this._saveVariantsCache(variantsCache);
       } catch (err) {
         const errMsg = String(err?.message || err?.errorDetail || err || "");
         if (err?.status === 429 || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Too Many Requests")) {
           error429 = true;
           const retrySec = window.extractRetrySecondsFromError(err);
-          // 1. Mostrar el error de cuota/límite de la API
-          alert(`⚠️ Límite de cuota alcanzado (Error 429: RESOURCE_EXHAUSTED).\n\n${errMsg}\n\nEl ciclo se detuvo de inmediato para proteger tu cuenta de Gemini.`);
-          // 2. Inmediatamente después, activar cronómetro en tiempo real con bloqueo de botones
+          alert(`⚠️ Límite de cuota alcanzado (Error 429: RESOURCE_EXHAUSTED).\n\n${errMsg}\n\nEl ciclo se detuvo de inmediato para proteger tu cuenta de Gemini.${resolvedFromCache ? `\n(${resolvedFromCache} piezas sí se aplicaron desde caché local.)` : ""}`);
           window.startAICooldownTimer(retrySec);
           break;
         } else {
@@ -12053,7 +12112,8 @@ ${JSON.stringify(items)}`;
     }
 
     if (!error429) {
-      alert(`✅ Consulta de variantes técnicas OEM completada.\nSe actualizaron las observaciones de ${consultadas} piezas sin alterar ninguna otra columna de la tabla.`);
+      const cacheNote = resolvedFromCache > 0 ? `\n(${resolvedFromCache} piezas resueltas desde caché sin gastar cuota)` : "";
+      alert(`✅ Consulta de variantes técnicas OEM completada.\nSe actualizaron las observaciones de ${consultadas} piezas con IA${cacheNote}, sin alterar precios ni otras columnas.`);
     }
   }
 
