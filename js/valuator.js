@@ -271,6 +271,11 @@ class VehicleValuatorManager {
           pieces = await this.callGeminiForDespiece(apiKey, statusText);
         } catch (aiErr) {
           console.warn("IA remota no disponible en este entorno, activando catálogo oficial de fabricante OEM:", aiErr);
+          const errMsg = String(aiErr?.message || aiErr || "");
+          if (errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Too Many Requests")) {
+            const retrySec = window.extractRetrySecondsFromError ? window.extractRetrySecondsFromError(aiErr) : 60;
+            if (window.startAICooldownTimer) window.startAICooldownTimer(retrySec);
+          }
           pieces = null;
         }
       }

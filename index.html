@@ -3133,6 +3133,103 @@ if (typeof supabase !== "undefined" && supabase.createClient) {
 }
 
 
+// ==========================================
+// CONTROL DE CUOTA Y CRONÓMETRO DE ESPERA IA
+// ==========================================
+window.aiCooldownTimer = null;
+window.aiCooldownSecondsRemaining = 0;
+
+window.extractRetrySecondsFromError = function(err) {
+  const text = String(err?.message || err?.errorDetail || err || "");
+  // Extraer segundos explícitos: ej. "retry after 58s", "wait 45 seconds", "try again in 30s", "in 28.5s"
+  const match = text.match(/(?:retry|wait|after|in|again)[\s_:]*(\d+(?:\.\d+)?)\s*s?/i)
+    || text.match(/(\d+)\s*(?:segundos|seconds|seg|sec|s\b)/i);
+  if (match && match[1]) {
+    const sec = Math.ceil(parseFloat(match[1]));
+    if (sec > 0 && sec <= 600) return sec;
+  }
+  return 60; // Espera de respaldo de 60 segundos si no viene explícito
+};
+
+window.setAIButtonsDisabled = function(disabled) {
+  const selectors = [
+    "#ai-batch-pricing-btn",
+    "#ai-variants-updater-btn",
+    "#ai-price-fetch-variants-btn",
+    "#valuator-ai-inspection-btn",
+    "button[onclick*='aiRegisterManager']",
+    "button[onclick*='aiPriceUpdaterManager']",
+    "button[onclick*='runAIVisualInspection']"
+  ];
+  const aiButtons = document.querySelectorAll(selectors.join(", "));
+  aiButtons.forEach(btn => {
+    btn.disabled = disabled;
+    if (disabled) {
+      if (!btn.dataset.prevTitle) btn.dataset.prevTitle = btn.getAttribute("title") || "";
+      btn.setAttribute("title", "Enfriamiento de cuota de IA activo. Espera a que termine el cronómetro.");
+      btn.classList.add("opacity-50", "cursor-not-allowed");
+    } else {
+      if (btn.dataset.prevTitle) btn.setAttribute("title", btn.dataset.prevTitle);
+      btn.classList.remove("opacity-50", "cursor-not-allowed");
+    }
+  });
+};
+
+window.startAICooldownTimer = function(seconds) {
+  const totalSec = Math.max(1, Math.ceil(Number(seconds) || 60));
+  window.aiCooldownSecondsRemaining = totalSec;
+
+  if (window.aiCooldownTimer) {
+    clearInterval(window.aiCooldownTimer);
+    window.aiCooldownTimer = null;
+  }
+
+  // Deshabilitar botones de IA mientras el cronómetro esté activo
+  window.setAIButtonsDisabled(true);
+
+  let banner = document.getElementById("ai-quota-cooldown-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "ai-quota-cooldown-banner";
+    banner.className = "fixed bottom-5 right-5 z-[9999] bg-slate-900/95 text-amber-300 px-5 py-3.5 rounded-2xl shadow-2xl border-2 border-amber-500 flex items-center gap-3 text-xs font-black backdrop-blur-md transition-all duration-300";
+    document.body.appendChild(banner);
+  }
+
+  const renderTimerText = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    const timeFormatted = m > 0 ? `${m}:${s < 10 ? '0' : ''}${s}` : `${s}s`;
+    const fullText = `Tiempo de espera para la siguiente consulta por IA: ${timeFormatted}`;
+    if (banner) {
+      banner.innerHTML = `<span class="text-base animate-pulse">⏳</span><span>${fullText}</span>`;
+      banner.classList.remove("hidden");
+    }
+    const modalCount = document.getElementById("ai-price-item-count");
+    if (modalCount) {
+      modalCount.textContent = fullText;
+    }
+  };
+
+  renderTimerText(window.aiCooldownSecondsRemaining);
+
+  window.aiCooldownTimer = setInterval(() => {
+    window.aiCooldownSecondsRemaining--;
+    if (window.aiCooldownSecondsRemaining <= 0) {
+      clearInterval(window.aiCooldownTimer);
+      window.aiCooldownTimer = null;
+      window.aiCooldownSecondsRemaining = 0;
+      if (banner) banner.classList.add("hidden");
+      // Reactivar botones al finalizar
+      window.setAIButtonsDisabled(false);
+      if (window.aiPriceUpdaterManager?.renderProposals) {
+        window.aiPriceUpdaterManager.renderProposals();
+      }
+    } else {
+      renderTimerText(window.aiCooldownSecondsRemaining);
+    }
+  }, 1000);
+};
+
 window.callGeminiProxy = async (model, request) => {
   const reqPayload = JSON.parse(JSON.stringify(request || {}));
 
@@ -3196,7 +3293,15 @@ window.callGeminiProxy = async (model, request) => {
 
         const errDetail = await extractErrorDetail(res);
         lastError = new Error(`Gemini API error (${res.status}) [${tryModel}]: ${errDetail}`);
+        lastError.status = res.status;
+        lastError.errorDetail = errDetail;
         console.warn(`Llamada con ${tryModel} falló (${res.status}):`, errDetail);
+
+        // REGLA 1: Ante un 429 (límite de cuota o rate limit), DETENER de inmediato el fallback de modelos
+        // para no duplicar peticiones contra la API ni agotar la cuota del modelo de respaldo.
+        if (res.status === 429 || String(errDetail).includes("429") || String(errDetail).includes("RESOURCE_EXHAUSTED")) {
+          throw lastError;
+        }
 
         if (res.status === 400 && reqPayload.tools) {
           delete reqPayload.tools;
@@ -3212,10 +3317,15 @@ window.callGeminiProxy = async (model, request) => {
           if (retryRes.ok) return retryRes;
           const retryErrDetail = await extractErrorDetail(retryRes);
           lastError = new Error(`Gemini API error (${retryRes.status}) [${tryModel} sin tools]: ${retryErrDetail}`);
+          lastError.status = retryRes.status;
+          lastError.errorDetail = retryErrDetail;
           console.warn(`Reintento sin tools con ${tryModel} falló (${retryRes.status}):`, retryErrDetail);
+          if (retryRes.status === 429) {
+            throw lastError;
+          }
         }
 
-        if (res.status === 503 || res.status === 429) {
+        if (res.status === 503) {
           if (attempt < 2) await new Promise(r => setTimeout(r, 1200));
           else break;
         } else {
@@ -3223,6 +3333,10 @@ window.callGeminiProxy = async (model, request) => {
         }
       } catch (fetchErr) {
         lastError = fetchErr;
+        // Si el error fue por 429, romper completamente y relanzar sin probar el modelo de respaldo
+        if (fetchErr.status === 429 || String(fetchErr.message || "").includes("429") || String(fetchErr.message || "").includes("RESOURCE_EXHAUSTED")) {
+          throw fetchErr;
+        }
         break;
       }
     }
@@ -7548,6 +7662,11 @@ class VehicleValuatorManager {
           pieces = await this.callGeminiForDespiece(apiKey, statusText);
         } catch (aiErr) {
           console.warn("IA remota no disponible en este entorno, activando catálogo oficial de fabricante OEM:", aiErr);
+          const errMsg = String(aiErr?.message || aiErr || "");
+          if (errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Too Many Requests")) {
+            const retrySec = window.extractRetrySecondsFromError ? window.extractRetrySecondsFromError(aiErr) : 60;
+            if (window.startAICooldownTimer) window.startAICooldownTimer(retrySec);
+          }
           pieces = null;
         }
       }
@@ -8953,7 +9072,11 @@ Reglas: collision_damage_visible solo es true ante daño de colisión visible; m
     } catch (error) {
       console.error("No se pudo completar la inspección visual con IA:", error);
       const msg = error.message || "";
-      if (msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("unavailable")) {
+      if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("Too Many Requests")) {
+        alert(`⚠️ Límite de cuota alcanzado (Error 429: RESOURCE_EXHAUSTED).\n\n${msg}\n\nPor favor espera a que se recargue la cuota de la API.`);
+        const retrySec = window.extractRetrySecondsFromError ? window.extractRetrySecondsFromError(error) : 60;
+        if (window.startAICooldownTimer) window.startAICooldownTimer(retrySec);
+      } else if (msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("unavailable")) {
         alert("⚠️ Aviso de conexión con IA:\n" + msg + "\n\nSe cargará el diagnóstico técnico de respaldo fundamentado en catálogos OEM.");
       } else {
         alert(`No se pudo completar la inspección con IA: ${msg}`);
@@ -11780,7 +11903,63 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
     return rawText.substring(0, 140);
   }
 
-  // --- ETAPA 2: CONSULTA DE VARIANTES TÉCNICAS OEM CON IA (BAJO DEMANDA) ---
+  // --- CONSULTA POR LOTES DE VARIANTES TÉCNICAS OEM (15 A 20 PIEZAS POR LLAMADA) ---
+  async _fetchBatchOEMVersionObservations(batch) {
+    if (!batch || !batch.length) return {};
+    const items = batch.map(p => ({
+      id: p.id,
+      pieza: p.pieza || "",
+      vehiculo: p.vehiculo || p._part?.vehiculo_origen || "",
+      anio: p.anio || p._part?.anio || ""
+    }));
+
+    const prompt = `Eres un técnico automotriz experto en manuales de taller OEM oficiales.
+Tu única fuente permitida son manuales de taller del fabricante (Ford Motorcraft, GM ACDelco, Nissan FAST, Toyota TIS, VW ETKA, etc.) y boletines técnicos oficiales (TSB). Queda estrictamente prohibido usar foros, blogs o fuentes no oficiales.
+
+Para cada una de las siguientes piezas automotrices, busca en manuales OEM si existen variantes técnicas documentadas (ejemplos: motor con distribución de cadena vs banda, transmisión 5vel vs 6vel, con o sin turbo, sensor 3 pines vs 4 pines, polea 5 vs 6 canales, etc.).
+Devuelve ÚNICAMENTE un array JSON válido con la forma:
+[{"id": "...", "variante": "descripción técnica corta máx 120 caracteres o vacía si no hay variantes documentadas"}]
+
+Piezas a verificar:
+${JSON.stringify(items)}`;
+
+    const response = await window.callGeminiProxy("gemini-3.8-flash", {
+      contents: [{ parts: [{ text: prompt }] }],
+      tools: [{ googleSearch: {} }],
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.1 }
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => `HTTP ${response.status}`);
+      const err = new Error(`Gemini API error (${response.status}): ${errText}`);
+      err.status = response.status;
+      err.errorDetail = errText;
+      throw err;
+    }
+
+    const data = await response.json();
+    const candidate = data?.candidates?.[0];
+    const rawText = (candidate?.content?.parts || []).map(p => p.text || "").join("").replace(/```json/gi, "").replace(/```/g, "").trim();
+    const resultsMap = {};
+    try {
+      const parsed = JSON.parse(rawText);
+      if (Array.isArray(parsed)) {
+        parsed.forEach(item => {
+          if (item?.id && typeof item.variante === "string") {
+            const v = item.variante.trim().replace(/^"|"$/g, "");
+            if (v && v !== '""' && v.length >= 4) {
+              resultsMap[String(item.id)] = v.substring(0, 140);
+            }
+          }
+        });
+      }
+    } catch (parseErr) {
+      console.warn("No se pudo parsear respuesta JSON de variantes por lote:", parseErr, rawText);
+    }
+    return resultsMap;
+  }
+
+  // --- ETAPA 2: CONSULTA DE VARIANTES TÉCNICAS OEM CON IA (POR LOTES DE 15-20 PIEZAS) ---
   async fetchVariantsForSelected() {
     const selected = this.proposals.filter(p => p.selected);
     if (!selected.length) {
@@ -11798,52 +11977,65 @@ No expliques ni justifiques. Solo devuelve el texto de observación o "".`;
 
     let error429 = false;
     let consultadas = 0;
+    const batchSize = 15; // Lotes de 15 a 20 piezas para optimizar el consumo de cuota
+    const totalBatches = Math.ceil(selected.length / batchSize);
 
-    // Llamadas estrictamente secuenciales (una a la vez, nunca Promise.all)
-    for (let i = 0; i < selected.length; i++) {
-      const proposal = selected[i];
-      if (countEl) {
-        countEl.textContent = `Consultando variante ${i + 1} de ${selected.length}: ${proposal.pieza}...`;
-      }
+    for (let b = 0; b < selected.length; b += batchSize) {
+      const batchIndex = Math.floor(b / batchSize);
+      const currentBatch = selected.slice(b, b + batchSize);
 
-      // Pausa obligatoria de 6 segundos entre peticiones secuenciales para evitar 429
-      if (i > 0) {
+      // Mantener la pausa obligatoria de 6 segundos solo si hay más de un lote (entre lote y lote)
+      if (batchIndex > 0) {
+        if (countEl) {
+          countEl.textContent = `Pausa de 6s entre lotes para respetar cuota... (Lote ${batchIndex + 1} de ${totalBatches})`;
+        }
         await new Promise(r => setTimeout(r, 6000));
       }
 
+      if (countEl) {
+        countEl.textContent = `Consultando variantes con IA: lote ${batchIndex + 1} de ${totalBatches} (${currentBatch.length} piezas)...`;
+      }
+
       try {
-        const oemObs = await this._fetchOEMVersionObservation(proposal._part);
-        if (oemObs) {
-          proposal.suggestedObservacion = oemObs;
+        const variantsMap = await this._fetchBatchOEMVersionObservations(currentBatch);
+        currentBatch.forEach(proposal => {
+          const oemObs = variantsMap[String(proposal.id)];
+          if (oemObs) {
+            proposal.suggestedObservacion = oemObs;
 
-          // REGLA ESTRICTA DE GUARDADO:
-          // Escribir/anexar exclusivamente en la columna observacion (preservando texto previo)
-          const existingObs = (proposal._part.observacion || "").trim();
-          let nuevaObs = oemObs;
-          if (existingObs) {
-            const partes = existingObs.split(" / ");
-            const fallaExistente = partes.length > 1 ? partes.slice(1).join(" / ").trim() : (partes[0] || "");
-            nuevaObs = fallaExistente && !fallaExistente.toLowerCase().includes(oemObs.toLowerCase())
-              ? `${oemObs} / ${fallaExistente}`
-              : oemObs;
+            // REGLA ESTRICTA DE GUARDADO:
+            // Escribir/anexar exclusivamente en la columna observacion (preservando texto previo)
+            const existingObs = (proposal._part.observacion || "").trim();
+            let nuevaObs = oemObs;
+            if (existingObs) {
+              const partes = existingObs.split(" / ");
+              const fallaExistente = partes.length > 1 ? partes.slice(1).join(" / ").trim() : (partes[0] || "");
+              nuevaObs = fallaExistente && !fallaExistente.toLowerCase().includes(oemObs.toLowerCase())
+                ? `${oemObs} / ${fallaExistente}`
+                : oemObs;
+            }
+
+            // Persistir EXCLUSIVAMENTE el campo observacion en DB
+            // Ninguna otra columna (PRECIO BASE, PRECIO MÍNIMO, COSTO, etc.) se modifica
+            window.yonkeDB.updatePart(proposal.id, {
+              observacion: nuevaObs
+            });
+            proposal._part.observacion = nuevaObs;
+            consultadas++;
           }
-
-          // Persistir EXCLUSIVAMENTE el campo observacion en DB
-          // Ninguna otra columna (PRECIO BASE, PRECIO MÍNIMO, COSTO, etc.) se modifica
-          window.yonkeDB.updatePart(proposal.id, {
-            observacion: nuevaObs
-          });
-          proposal._part.observacion = nuevaObs;
-          consultadas++;
-        }
+        });
       } catch (err) {
-        const errMsg = String(err?.message || err || "");
-        if (errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Too Many Requests")) {
+        const errMsg = String(err?.message || err?.errorDetail || err || "");
+        if (err?.status === 429 || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Too Many Requests")) {
           error429 = true;
-          alert("⚠️ Límite de cuota por minuto alcanzado (Error 429: RESOURCE_EXHAUSTED).\n\nEl ciclo de consulta de variantes se detuvo de inmediato para proteger tu cuota de Gemini sin sobrescribir datos. Podrás continuar en un minuto con las piezas restantes.");
+          const retrySec = window.extractRetrySecondsFromError(err);
+          // 1. Mostrar el error de cuota/límite de la API
+          alert(`⚠️ Límite de cuota alcanzado (Error 429: RESOURCE_EXHAUSTED).\n\n${errMsg}\n\nEl ciclo se detuvo de inmediato para proteger tu cuenta de Gemini.`);
+          // 2. Inmediatamente después, activar cronómetro en tiempo real con bloqueo de botones
+          window.startAICooldownTimer(retrySec);
           break;
         } else {
-          console.warn(`Error al consultar variante para ${proposal.pieza}:`, errMsg);
+          console.warn(`Error al consultar variantes por lote:`, errMsg);
         }
       }
 
