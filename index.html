@@ -2217,12 +2217,12 @@
                 <span>🔍</span>
                 <span>Consultar Variantes con IA</span>
               </button>
-              <label class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 cursor-pointer select-none" title="Desactivado por defecto para ahorrar cuota de búsqueda web por minuto">
-                <input type="checkbox" id="ai-price-variants-web-chk" class="w-3.5 h-3.5 text-purple-600 rounded border-slate-300 cursor-pointer" />
+              <label class="inline-flex items-center gap-1 text-[11px] font-bold text-slate-900 bg-white/90 px-2 py-0.5 rounded border border-slate-300 cursor-pointer select-none" title="Desactivado por defecto para ahorrar cuota de búsqueda web por minuto">
+                <input type="checkbox" id="ai-price-variants-web-chk" class="w-3.5 h-3.5 text-purple-600 rounded border-slate-400 cursor-pointer" />
                 <span>Búsqueda web</span>
               </label>
-              <label class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 cursor-pointer select-none" title="Ignora variantes guardadas previamente en caché y vuelve a consultar a la IA">
-                <input type="checkbox" id="ai-price-force-variants-chk" class="w-3.5 h-3.5 text-purple-600 rounded border-slate-300 cursor-pointer" />
+              <label class="inline-flex items-center gap-1 text-[11px] font-bold text-slate-900 bg-white/90 px-2 py-0.5 rounded border border-slate-300 cursor-pointer select-none" title="Ignora variantes guardadas previamente en caché y vuelve a consultar a la IA">
+                <input type="checkbox" id="ai-price-force-variants-chk" class="w-3.5 h-3.5 text-purple-600 rounded border-slate-400 cursor-pointer" />
                 <span>Forzar nueva consulta</span>
               </label>
             </div>
@@ -3303,7 +3303,8 @@ window.callGeminiProxy = async (model, request) => {
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${data.session.access_token}`
           },
-          body: JSON.stringify({ model: tryModel, request: reqPayload })
+          body: JSON.stringify({ model: tryModel, request: reqPayload }),
+          signal: AbortSignal.timeout(25000)
         });
 
         if (res.ok) {
@@ -9796,7 +9797,7 @@ class ImagesManager {
     if (imgEl && part.fotos.length > 0) {
       imgEl.src = part.fotos[this.currentGalleryIndex];
     }
-    if (countEl) {
+    if (countEl && !(window.aiCooldownSecondsRemaining > 0)) {
       countEl.textContent = `Foto ${this.currentGalleryIndex + 1} de ${part.fotos.length}`;
     }
   }
@@ -12232,6 +12233,11 @@ ${JSON.stringify(items)}`;
       return;
     }
 
+    if (window.aiCooldownSecondsRemaining > 0) {
+      alert(`⏳ Tiempo de espera para la siguiente consulta por IA: ${window.aiCooldownSecondsRemaining}s`);
+      return;
+    }
+
     const btn = document.getElementById("ai-price-fetch-variants-btn");
     const countEl = document.getElementById("ai-price-item-count");
     const originalBtnText = btn ? btn.innerHTML : "";
@@ -12246,57 +12252,62 @@ ${JSON.stringify(items)}`;
     const batchSize = 15; // Lotes de 15 a 20 piezas para optimizar el consumo de cuota
     const totalBatches = Math.ceil(toFetch.length / batchSize);
 
-    for (let b = 0; b < toFetch.length; b += batchSize) {
-      const batchIndex = Math.floor(b / batchSize);
-      const currentBatch = toFetch.slice(b, b + batchSize);
+    try {
+      for (let b = 0; b < toFetch.length; b += batchSize) {
+        const batchIndex = Math.floor(b / batchSize);
+        const currentBatch = toFetch.slice(b, b + batchSize);
 
-      // Mantener la pausa obligatoria de 6 segundos solo si hay más de un lote (entre lote y lote)
-      if (batchIndex > 0) {
-        if (countEl) {
-          countEl.textContent = `Pausa de 6s entre lotes para respetar cuota... (Lote ${batchIndex + 1} de ${totalBatches})`;
-        }
-        await new Promise(r => setTimeout(r, 6000));
-      }
-
-      if (countEl) {
-        countEl.textContent = `Consultando variantes con IA${useWebSearch ? " (web)" : ""}: lote ${batchIndex + 1} de ${totalBatches} (${currentBatch.length} piezas)...`;
-      }
-
-      try {
-        const variantsMap = await this._fetchBatchOEMVersionObservations(currentBatch, useWebSearch);
-        currentBatch.forEach(proposal => {
-          const oemObs = variantsMap[String(proposal.id)];
-          if (oemObs) {
-            const cacheKey = this._getVariantCacheKey(proposal._part || proposal);
-            variantsCache[cacheKey] = oemObs;
-            this._applyVariantObservation(proposal, oemObs);
-            consultadas++;
+        // Mantener la pausa obligatoria de 6 segundos solo si hay más de un lote (entre lote y lote)
+        if (batchIndex > 0) {
+          if (countEl && !(window.aiCooldownSecondsRemaining > 0)) {
+            countEl.textContent = `Pausa de 6s entre lotes para respetar cuota... (Lote ${batchIndex + 1} de ${totalBatches})`;
           }
-        });
-        this._saveVariantsCache(variantsCache);
-      } catch (err) {
-        const errMsg = String(err?.message || err?.errorDetail || err || "");
-        if (err?.status === 429 || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Too Many Requests")) {
-          error429 = true;
-          const retrySec = window.extractRetrySecondsFromError(err);
-          alert(`⚠️ Límite de cuota alcanzado (Error 429: RESOURCE_EXHAUSTED).\n\n${errMsg}\n\nEl ciclo se detuvo de inmediato para proteger tu cuenta de Gemini.${resolvedFromCache ? `\n(${resolvedFromCache} piezas sí se aplicaron desde caché local.)` : ""}`);
-          window.startAICooldownTimer(retrySec);
-          break;
-        } else {
-          apiErrorMsg = errMsg;
-          console.warn(`Error al consultar variantes por lote:`, errMsg);
-          alert(`❌ Error al consultar variantes con IA:\n\n${errMsg}`);
-          break;
+          await new Promise(r => setTimeout(r, 6000));
         }
+
+        if (countEl && !(window.aiCooldownSecondsRemaining > 0)) {
+          countEl.textContent = `Consultando variantes con IA${useWebSearch ? " (web)" : ""}: lote ${batchIndex + 1} de ${totalBatches} (${currentBatch.length} piezas)...`;
+        }
+
+        try {
+          const variantsMap = await this._fetchBatchOEMVersionObservations(currentBatch, useWebSearch);
+          currentBatch.forEach(proposal => {
+            const oemObs = variantsMap[String(proposal.id)];
+            if (oemObs) {
+              const cacheKey = this._getVariantCacheKey(proposal._part || proposal);
+              variantsCache[cacheKey] = oemObs;
+              this._applyVariantObservation(proposal, oemObs);
+              consultadas++;
+            }
+          });
+          this._saveVariantsCache(variantsCache);
+        } catch (err) {
+          const errMsg = String(err?.message || err?.errorDetail || err || "");
+          if (err?.status === 429 || errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Too Many Requests")) {
+            error429 = true;
+            const retrySec = window.extractRetrySecondsFromError(err);
+            alert(`⚠️ Límite de cuota alcanzado (Error 429: RESOURCE_EXHAUSTED).\n\n${errMsg}\n\nEl ciclo se detuvo de inmediato para proteger tu cuenta de Gemini.${resolvedFromCache ? `\n(${resolvedFromCache} piezas sí se aplicaron desde caché local.)` : ""}`);
+            window.startAICooldownTimer(retrySec);
+            break;
+          } else {
+            apiErrorMsg = errMsg;
+            console.warn(`Error al consultar variantes por lote:`, errMsg);
+            alert(`❌ Error al consultar variantes con IA:\n\n${errMsg}`);
+            break;
+          }
+        }
+
+        this.renderProposals();
       }
-
-      this.renderProposals();
-    }
-
-    if (btn) {
-      btn.disabled = false;
-      btn.classList.remove("opacity-50", "cursor-not-allowed");
-      btn.innerHTML = originalBtnText;
+    } finally {
+      if (btn && !(window.aiCooldownSecondsRemaining > 0)) {
+        btn.disabled = false;
+        btn.classList.remove("opacity-50", "cursor-not-allowed");
+        btn.innerHTML = originalBtnText;
+      }
+      if (error429 || apiErrorMsg) {
+        this.renderProposals();
+      }
     }
 
     if (window.appManager?.renderInventoryTable) {
@@ -12314,7 +12325,7 @@ ${JSON.stringify(items)}`;
     const countEl = document.getElementById("ai-price-item-count");
     if (!tbody) return;
 
-    if (countEl) {
+    if (countEl && !(window.aiCooldownSecondsRemaining > 0)) {
       const total = this.proposals.length;
       const selectedCount = this.proposals.filter(p => p.selected).length;
       countEl.textContent = `${total} refacciones analizadas | ${selectedCount} marcadas (Regla 3:1 sobre Costo)`;
@@ -12416,7 +12427,7 @@ ${JSON.stringify(items)}`;
       this.proposals[idx].selected = Boolean(isChecked);
     }
     const countEl = document.getElementById("ai-price-item-count");
-    if (countEl) {
+    if (countEl && !(window.aiCooldownSecondsRemaining > 0)) {
       const total = this.proposals.length;
       const selectedCount = this.proposals.filter(p => p.selected).length;
       countEl.textContent = `${total} refacciones analizadas | ${selectedCount} marcadas`;
